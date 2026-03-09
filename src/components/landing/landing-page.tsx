@@ -4,15 +4,16 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
     Sparkles,
-    Trophy,
+    Heart,
     Users,
     Shield,
-    Zap,
+    BookOpen,
     ArrowRight,
     Star,
-    Gift,
-    Target,
+    Briefcase,
+    HandHeart,
     ChevronRight,
+    Banknote,
 } from "lucide-react";
 
 /* ── Animated Counter ──────────────────────────────────────── */
@@ -94,76 +95,88 @@ function FadeIn({ children, delay = 0 }: { children: React.ReactNode; delay?: nu
 
 /* ── Data ───────────────────────────────────────────────────── */
 const stats = [
-    { value: 10000, suffix: "+", label: "Active Users" },
-    { value: 500000, suffix: "+", label: "Rewards Given" },
-    { value: 2400, suffix: "+", label: "Challenges Completed" },
+    { value: 15000, suffix: "+", label: "Lives Impacted" },
+    { value: 3200, suffix: "+", label: "Jobs Created" },
+    { value: 8500, suffix: "+", label: "People Trained" },
 ];
 
 const steps = [
     {
-        icon: Target,
+        icon: HandHeart,
         number: "01",
-        title: "Join a Challenge",
-        desc: "Sign up and enter a 24-hour referral challenge with a single tap.",
+        title: "Connect With Us",
+        desc: "Register with TIVA Foundation to access our full range of social upliftment programmes.",
     },
     {
-        icon: Users,
+        icon: BookOpen,
         number: "02",
-        title: "Refer Friends",
-        desc: "Share your unique link. Every verified referral earns you points on the leaderboard.",
+        title: "Choose a Programme",
+        desc: "Select from charity support, employment assistance, skills training, or financial services.",
     },
     {
-        icon: Gift,
+        icon: Briefcase,
         number: "03",
-        title: "Earn Rewards",
-        desc: "Top the leaderboard and claim real rewards — cash, vouchers, and exclusive perks.",
+        title: "Build Your Future",
+        desc: "Receive hands-on support, funding opportunities, and insurance coverage to thrive.",
     },
 ];
 
 const features = [
     {
-        icon: Zap,
-        title: "24-Hour Challenges",
-        desc: "Fast-paced daily challenges keep the excitement high and rewards flowing.",
+        icon: Heart,
+        title: "Charity & Relief",
+        desc: "We provide essential aid, food, education, and healthcare support to underprivileged communities.",
+        gradient: "linear-gradient(135deg, #FF6B6B 0%, #ee0979 100%)",
+    },
+    {
+        icon: Briefcase,
+        title: "Employment Services",
+        desc: "Connecting job-seekers with livelihood opportunities through partnerships with leading employers.",
         gradient: "linear-gradient(135deg, #6C5CE7 0%, #a855f7 100%)",
     },
     {
-        icon: Trophy,
-        title: "Live Leaderboard",
-        desc: "Watch your rank climb in real-time as your referrals convert.",
+        icon: BookOpen,
+        title: "Skills Development",
+        desc: "Vocational training, digital literacy, and professional upskilling programmes for all age groups.",
         gradient: "linear-gradient(135deg, #00D2FF 0%, #6C5CE7 100%)",
     },
     {
-        icon: Gift,
-        title: "Instant Rewards",
-        desc: "No waiting — rewards are credited the moment the challenge ends.",
+        icon: Banknote,
+        title: "Financial & Insurance",
+        desc: "Micro-finance, savings schemes, and affordable insurance plans designed for every income level.",
         gradient: "linear-gradient(135deg, #00E676 0%, #00D2FF 100%)",
     },
     {
-        icon: Shield,
-        title: "Fraud-Proof",
-        desc: "Advanced KYC and anti-fraud systems ensure fair play for everyone.",
+        icon: Users,
+        title: "Community Building",
+        desc: "Fostering inclusive communities through outreach, mentorship, and grassroots development initiatives.",
         gradient: "linear-gradient(135deg, #FFD93D 0%, #FF6B6B 100%)",
+    },
+    {
+        icon: Shield,
+        title: "Transparent Operations",
+        desc: "Full accountability with verified KYC, audited funds, and real-time impact reporting.",
+        gradient: "linear-gradient(135deg, #a855f7 0%, #6C5CE7 100%)",
     },
 ];
 
 const testimonials = [
     {
         name: "Priya S.",
-        role: "Top Referrer",
-        quote: "I earned ₹5,000 in my very first challenge. The leaderboard makes it so addictive!",
+        role: "Skills Development Beneficiary",
+        quote: "TIVA Foundation's vocational training programme gave me the skills to start my own tailoring business. I am forever grateful.",
         stars: 5,
     },
     {
         name: "Rahul M.",
-        role: "Community Leader",
-        quote: "TIVA turned my network into real income. The daily challenges keep me coming back.",
+        role: "Employment Programme Participant",
+        quote: "Within two weeks of joining TIVA's employment service, I had three interviews lined up. I landed my dream job!",
         stars: 5,
     },
     {
         name: "Ananya K.",
-        role: "Consistent Winner",
-        quote: "Simple to use, instant payouts, and the competition is thrilling. Love it!",
+        role: "Micro-Finance Member",
+        quote: "The micro-finance scheme helped me grow my small business. Their insurance plan gave me peace of mind I never had before.",
         stars: 5,
     },
 ];
@@ -208,33 +221,34 @@ export default function LandingPage() {
                 <div className="landing-hero-content">
                     <FadeIn>
                         <div className="landing-hero-badge">
-                            <Zap size={14} />
-                            <span>24-Hour Referral Challenges</span>
+                            <Heart size={14} />
+                            <span>Empowering Communities Since Inception</span>
                         </div>
                     </FadeIn>
 
                     <FadeIn delay={100}>
                         <h1 className="landing-hero-title">
-                            Compete. Refer.{" "}
-                            <span className="gradient-text">Earn Rewards.</span>
+                            Uplift. Empower.{" "}
+                            <span className="gradient-text">Transform Lives.</span>
                         </h1>
                     </FadeIn>
 
                     <FadeIn delay={200}>
                         <p className="landing-hero-subtitle">
-                            Join daily challenges, climb the leaderboard by referring friends, and
-                            win real cash rewards — all in 24 hours.
+                            TIVA Foundation provides charity relief, employment assistance, skills
+                            development, and financial &amp; insurance services to build stronger,
+                            self-reliant communities.
                         </p>
                     </FadeIn>
 
                     <FadeIn delay={300}>
                         <div className="landing-hero-actions">
                             <Link href="/login" className="btn-primary landing-hero-btn">
-                                Start Your Challenge
+                                Get Involved
                                 <ArrowRight size={18} />
                             </Link>
                             <a href="#how-it-works" className="btn-secondary landing-hero-btn-secondary">
-                                See How It Works
+                                Our Services
                                 <ChevronRight size={16} />
                             </a>
                         </div>
@@ -262,10 +276,10 @@ export default function LandingPage() {
             <section className="landing-section" id="how-it-works">
                 <FadeIn>
                     <div className="landing-section-header">
-                        <span className="landing-section-tag">Simple & Powerful</span>
-                        <h2 className="landing-section-title">How It Works</h2>
+                        <span className="landing-section-tag">Simple &amp; Impactful</span>
+                        <h2 className="landing-section-title">How We Help</h2>
                         <p className="landing-section-desc">
-                            Three simple steps to start earning rewards today.
+                            Three simple steps to access TIVA Foundation&apos;s life-changing programmes.
                         </p>
                     </div>
                 </FadeIn>
@@ -293,10 +307,10 @@ export default function LandingPage() {
             <section className="landing-section">
                 <FadeIn>
                     <div className="landing-section-header">
-                        <span className="landing-section-tag">Why TIVA</span>
-                        <h2 className="landing-section-title">Built for Winners</h2>
+                        <span className="landing-section-tag">Our Services</span>
+                        <h2 className="landing-section-title">What We Offer</h2>
                         <p className="landing-section-desc">
-                            Everything you need to compete, grow your network, and earn — all in one platform.
+                            Comprehensive social-impact services designed to uplift individuals and communities across every walk of life.
                         </p>
                     </div>
                 </FadeIn>
@@ -320,8 +334,8 @@ export default function LandingPage() {
             <section className="landing-section">
                 <FadeIn>
                     <div className="landing-section-header">
-                        <span className="landing-section-tag">Loved by Users</span>
-                        <h2 className="landing-section-title">What Players Say</h2>
+                        <span className="landing-section-tag">Real Stories</span>
+                        <h2 className="landing-section-title">Lives We&apos;ve Changed</h2>
                     </div>
                 </FadeIn>
 
@@ -360,14 +374,14 @@ export default function LandingPage() {
                 <FadeIn>
                     <div className="landing-cta-content">
                         <h2 className="landing-cta-title">
-                            Ready to Start <span className="gradient-text">Winning?</span>
+                            Ready to Make a <span className="gradient-text">Difference?</span>
                         </h2>
                         <p className="landing-cta-desc">
-                            Join thousands of players already competing in daily referral challenges.
-                            Your first reward is just one challenge away.
+                            Join TIVA Foundation today — as a beneficiary, volunteer, or donor.
+                            Every step forward counts toward a brighter community.
                         </p>
                         <Link href="/login" className="btn-primary landing-hero-btn">
-                            Join Now — It&apos;s Free
+                            Join TIVA Foundation
                             <ArrowRight size={18} />
                         </Link>
                     </div>
@@ -379,10 +393,10 @@ export default function LandingPage() {
                 <div className="landing-footer-inner">
                     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                         <Sparkles size={16} style={{ color: "var(--brand-primary)" }} />
-                        <span style={{ fontWeight: 700, fontSize: "14px" }}>TIVA</span>
+                        <span style={{ fontWeight: 700, fontSize: "14px" }}>TIVA Foundation</span>
                     </div>
                     <p style={{ color: "var(--text-muted)", fontSize: "13px" }}>
-                        © {new Date().getFullYear()} TIVA. All rights reserved.
+                        © {new Date().getFullYear()} TIVA Foundation. All rights reserved. Empowering communities through charity, employment, skills &amp; financial services.
                     </p>
                 </div>
             </footer>
