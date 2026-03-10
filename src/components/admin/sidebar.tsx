@@ -14,6 +14,7 @@ import {
     LogOut,
     Menu,
     X,
+    LayoutGrid,
 } from "lucide-react";
 import { signOut } from "@/app/actions/auth";
 
@@ -24,7 +25,9 @@ const navItems = [
     { href: "/admin/fraud", label: "Fraud", icon: AlertTriangle },
     { href: "/admin/rewards", label: "Rewards", icon: Gift },
     { href: "/admin/challenges", label: "Challenges", icon: Trophy },
+    { href: "/admin/services/cow-donation", label: "Services", icon: LayoutGrid },
 ];
+
 
 export function AdminSidebar() {
     const pathname = usePathname();

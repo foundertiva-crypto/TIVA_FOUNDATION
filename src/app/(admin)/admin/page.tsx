@@ -1,14 +1,17 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Users, Shield, AlertTriangle, Trophy } from "lucide-react";
+import { getServiceMetrics } from "@/app/actions/service-metrics";
+import { ServiceMetricsGrid } from "@/components/admin/service-metrics-grid";
 
 export default async function AdminOverview() {
     const admin = createAdminClient();
 
-    const [usersRes, kycRes, flaggedRes, challengeRes] = await Promise.all([
+    const [usersRes, kycRes, flaggedRes, challengeRes, serviceMetrics] = await Promise.all([
         admin.from("profiles").select("id", { count: "exact", head: true }),
         admin.from("kyc_documents").select("id", { count: "exact", head: true }).eq("status", "pending"),
         admin.from("profiles").select("id", { count: "exact", head: true }).eq("is_flagged", true),
         admin.from("user_challenges").select("id", { count: "exact", head: true }).eq("status", "active"),
+        getServiceMetrics("weekly"),
     ]);
 
     const stats = [
@@ -29,6 +32,7 @@ export default async function AdminOverview() {
                     display: "grid",
                     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 200px), 1fr))",
                     gap: "12px",
+                    marginBottom: "40px",
                 }}
             >
                 {stats.map((stat) => {
@@ -81,6 +85,9 @@ export default async function AdminOverview() {
                     );
                 })}
             </div>
+
+            {/* Service Metrics Grid */}
+            <ServiceMetricsGrid initialData={serviceMetrics} />
         </div>
     );
 }
