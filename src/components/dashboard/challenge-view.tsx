@@ -8,12 +8,11 @@ import { startChallenge, restartChallenge } from "@/app/actions/challenge";
 import type { UserChallenge, Reward } from "@/types/database";
 
 interface Props {
-    userId: string;
     initialChallenge: UserChallenge | null;
     rewards: Reward[];
 }
 
-export function ChallengeView({ userId, initialChallenge, rewards }: Props) {
+export function ChallengeView({ initialChallenge, rewards }: Props) {
     const { challenge, timeRemaining, isExpired, progress } =
         useChallenge(initialChallenge);
     const [loading, setLoading] = useState(false);

@@ -71,14 +71,6 @@ function buildHourBuckets(n: number): string[] {
     });
 }
 
-// Typed row structures for each table
-type DonationRow = { id: string; user_id: string; amount: number; payment_status: string; created_at: string };
-type ReferralRow = { id: string; referrer_id: string; status: string; created_at: string };
-type DepositRow = { id: string; user_id: string; amount: number; status: string; created_at: string };
-type KycRow = { id: string; user_id: string; status: string; created_at: string };
-
-type ServiceRow = DonationRow | ReferralRow | DepositRow | KycRow;
-
 const SERVICE_DEFS = [
     {
         slug: "cow-donation",
@@ -100,7 +92,7 @@ const SERVICE_DEFS = [
         gradient: "linear-gradient(135deg, #6C5CE7 0%, #00D2FF 100%)",
         table: "referrals" as const,
         getUserId: (r: AnyRecord) => r.referrer_id as string,
-        getAmount: (_: AnyRecord) => 0,
+        getAmount: () => 0,
         getDate: (r: AnyRecord) => r.created_at as string,
         getStatus: (r: AnyRecord) => r.status as string,
     },
@@ -124,7 +116,7 @@ const SERVICE_DEFS = [
         gradient: "linear-gradient(135deg, #FFD93D 0%, #FF6B6B 100%)",
         table: "kyc_documents" as const,
         getUserId: (r: AnyRecord) => r.user_id as string,
-        getAmount: (_: AnyRecord) => 0,
+        getAmount: () => 0,
         getDate: (r: AnyRecord) => r.created_at as string,
         getStatus: (r: AnyRecord) => r.status as string,
     },

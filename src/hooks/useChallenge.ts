@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import type { UserChallenge } from "@/types/database";
 
 interface ChallengeState {
@@ -11,23 +11,22 @@ interface ChallengeState {
     loading: boolean;
 }
 
+function calculateTimeRemaining(challenge: UserChallenge | null): number {
+    if (!challenge || challenge.status !== "active") return 0;
+    const endsAt = new Date(challenge.ends_at).getTime();
+    return Math.max(0, endsAt - Date.now());
+}
+
 export function useChallenge(initialChallenge: UserChallenge | null): ChallengeState {
     const [challenge, setChallenge] = useState<UserChallenge | null>(initialChallenge);
-    const [timeRemaining, setTimeRemaining] = useState(0);
+    const [timeRemaining, setTimeRemaining] = useState(() =>
+        calculateTimeRemaining(initialChallenge)
+    );
     const [loading] = useState(false);
 
-    const calculateTimeRemaining = useCallback(() => {
-        if (!challenge || challenge.status !== "active") return 0;
-        const endsAt = new Date(challenge.ends_at).getTime();
-        const now = Date.now();
-        return Math.max(0, endsAt - now);
-    }, [challenge]);
-
     useEffect(() => {
-        setTimeRemaining(calculateTimeRemaining());
-
         const interval = setInterval(() => {
-            const remaining = calculateTimeRemaining();
+            const remaining = calculateTimeRemaining(challenge);
             setTimeRemaining(remaining);
 
             if (remaining <= 0 && challenge?.status === "active") {
@@ -38,7 +37,7 @@ export function useChallenge(initialChallenge: UserChallenge | null): ChallengeS
         }, 1000);
 
         return () => clearInterval(interval);
-    }, [challenge, calculateTimeRemaining]);
+    }, [challenge]);
 
     const isExpired = timeRemaining <= 0 && challenge?.status === "active";
     const progress = challenge

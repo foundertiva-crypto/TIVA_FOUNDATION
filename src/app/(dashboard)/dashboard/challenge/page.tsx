@@ -23,7 +23,6 @@ export default async function ChallengePage() {
 
     return (
         <ChallengeView
-            userId={user.id}
             initialChallenge={challenge}
             rewards={rewards ?? []}
         />
