@@ -32,10 +32,14 @@ Status: Local control plane and GitHub delivery verified; remote GPU/RDP expansi
 ### GitHub application delivery
 
 - `npm ci` completed for this repository.
+- Next.js and `eslint-config-next` are upgraded to 16.4.2.
 - `npm run lint` passes with zero errors and zero warnings.
 - `npm run build` passes and generates all application routes.
+- `npm audit --omit=dev --audit-level=high` reports 0 runtime vulnerabilities.
 - Fixed the React state-in-effect lint error in `src/hooks/useChallenge.ts`.
 - Removed unused service row types and an unused challenge component prop.
+
+The full audit still reports 5 high findings in the development-only ESLint dependency chain. npm's forced recommendation would downgrade the Next.js ESLint configuration, so it was not applied.
 
 ## Target operating architecture
 
@@ -81,5 +85,7 @@ Every handoff should carry structured data with source IDs, evidence links, conf
 ## Next deployment gate
 
 Approve the provider/region, monthly budget, GPU workload and model family, VM idle policy, existing-VM start permission, ERP source of truth, first Foundation/education launch product, and Cloudflare Access/Tailscale choice. Then execute plan-only infrastructure changes, backup/restore tests, private access wiring, Linux RDP hardening, GPU-driver validation, read-only data inventory, synthetic reconciliation, and MVP activation.
+
+The ERP and campaign launch layer is not declared live by this delivery. It is ready for the approved implementation sequence, but no financial transaction, customer message, paid campaign, or bulk data movement is executed until its source of truth, audience, budget, approvals, reconciliation, and rollback plan are recorded.
 
 No credentials, tokens, private keys, or database secrets are stored in this document.
