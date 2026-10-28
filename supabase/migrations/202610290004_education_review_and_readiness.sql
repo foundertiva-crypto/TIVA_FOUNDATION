@@ -124,9 +124,11 @@ BEGIN
   IF TG_OP = 'INSERT' THEN
     identity_changed := true;
   ELSE
+    -- A second Foundation admin may publish a programme after readiness was
+    -- attested. Re-attestation by the current admin is required only if the
+    -- underlying notice/contact/retention/owner/course data changes.
     identity_changed :=
-      OLD.status IS DISTINCT FROM NEW.status
-      OR OLD.privacy_notice_version IS DISTINCT FROM NEW.privacy_notice_version
+      OLD.privacy_notice_version IS DISTINCT FROM NEW.privacy_notice_version
       OR OLD.privacy_contact_email IS DISTINCT FROM NEW.privacy_contact_email
       OR OLD.retention_statement IS DISTINCT FROM NEW.retention_statement
       OR OLD.safeguarding_owner_user_id IS DISTINCT FROM NEW.safeguarding_owner_user_id
