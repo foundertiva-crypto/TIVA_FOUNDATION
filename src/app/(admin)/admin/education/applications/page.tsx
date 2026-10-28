@@ -1,3 +1,4 @@
+import { requireEducationAdmin } from "@/lib/education/admin-guard";
 import Link from "next/link";
 import { AlertTriangle, ArrowLeft, ClipboardCheck, ExternalLink, FileClock, UserRoundCheck } from "lucide-react";
 import { reviewEducationApplication } from "@/app/actions/education";
@@ -65,6 +66,7 @@ function statusLabel(value: string) {
 }
 
 export default async function EducationApplicationsAdminPage({ searchParams }: Props) {
+  await requireEducationAdmin();
   const query = await searchParams;
   const errorMessage = query.error ? errorMessages[query.error] ?? "The requested operation could not be completed." : null;
 
