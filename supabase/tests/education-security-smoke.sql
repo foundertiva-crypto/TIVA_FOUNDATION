@@ -135,13 +135,20 @@ BEGIN
 END
 $test$;
 
--- Learner can read only their own application. They cannot approve it.
-UPDATE public.education_applications
-   SET status = 'accepted'
- WHERE id = '40000000-0000-4000-8000-000000000001';
-
+-- Learner can read only their own application. Status updates are revoked and must use the review RPC.
 DO $test$
+DECLARE blocked boolean := false;
 BEGIN
+  BEGIN
+    UPDATE public.education_applications
+       SET status = 'accepted'
+     WHERE id = '40000000-0000-4000-8000-000000000001';
+  EXCEPTION WHEN insufficient_privilege THEN blocked := true;
+  END;
+  IF NOT blocked THEN
+    RAISE EXCEPTION 'SECURITY FAILURE: learner updated application status outside review RPC';
+  END IF;
+
   IF EXISTS (
     SELECT 1 FROM public.education_applications
      WHERE id = '40000000-0000-4000-8000-000000000002'
@@ -182,6 +189,27 @@ SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000003', true);
 SELECT set_config('request.jwt.claim.role', 'authenticated', true);
 SELECT set_config('request.jwt.claims', '{"sub":"10000000-0000-4000-8000-000000000003","role":"authenticated"}', true);
+
+-- Enrollment must not be created from an unaccepted application.
+DO $test$
+DECLARE blocked boolean := false;
+BEGIN
+  BEGIN
+    INSERT INTO public.education_enrollments
+      (cohort_id, learner_user_id, application_id, status, created_by)
+    VALUES
+      ('30000000-0000-4000-8000-000000000001',
+       '10000000-0000-4000-8000-000000000002',
+       '40000000-0000-4000-8000-000000000002',
+       'enrolled',
+       '10000000-0000-4000-8000-000000000003');
+  EXCEPTION WHEN check_violation THEN blocked := true;
+  END;
+  IF NOT blocked THEN
+    RAISE EXCEPTION 'SECURITY FAILURE: enrollment created from a non-accepted application';
+  END IF;
+END
+$test$;
 
 SELECT public.review_education_application(
   '40000000-0000-4000-8000-000000000001', 'under_review', 'Synthetic CI reviewer note'
