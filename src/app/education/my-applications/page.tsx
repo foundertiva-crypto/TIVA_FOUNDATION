@@ -200,6 +200,9 @@ export default async function MyEducationApplicationsPage() {
     <main style={{ minHeight: "100vh", background: "var(--bg-primary)", color: "var(--text-primary)", padding: "clamp(18px,4vw,44px)" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
         <Link href="/education" style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 13, textDecoration: "none", color: "var(--text-secondary)" }}><ArrowLeft size={15}/> Education programmes</Link>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
+          <Link href="/education/learning" className="btn-primary" style={{ display: "inline-flex", textDecoration: "none" }}>Learning & assignments</Link>
+        </div>
         <header style={{ marginTop: 22 }}>
           <p style={{ color: "var(--brand-secondary)", fontSize: 11, fontWeight: 850, letterSpacing: ".14em", textTransform: "uppercase" }}>TIVA World Foundation</p>
           <h1 style={{ fontSize: "clamp(27px, 5vw, 40px)", fontWeight: 850, letterSpacing: "-.035em", marginTop: 6 }}>My education applications</h1>
