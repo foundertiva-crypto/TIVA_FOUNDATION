@@ -238,6 +238,95 @@ BEGIN
 END
 $test$;
 
+-- Assign Learner A as a test mentor, then verify they still cannot review their own submission.
+INSERT INTO public.education_staff_memberships
+  (user_id, role, program_id, cohort_id, is_active, granted_by)
+VALUES
+  ('10000000-0000-4000-8000-000000000001', 'mentor',
+   '20000000-0000-4000-8000-000000000001',
+   '30000000-0000-4000-8000-000000000001', true,
+   '10000000-0000-4000-8000-000000000003');
+
+RESET ROLE;
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true);
+SELECT set_config('request.jwt.claim.role', 'authenticated', true);
+SELECT set_config('request.jwt.claims', '{"sub":"10000000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+
+DO $test$
+DECLARE blocked boolean := false;
+BEGIN
+  BEGIN
+    INSERT INTO public.education_assessment_reviews
+      (submission_id, cohort_id, reviewer_user_id, score, max_score, feedback, outcome, rubric_version)
+    SELECT s.id, s.cohort_id, '10000000-0000-4000-8000-000000000001',
+           80, 100, 'Self review should be rejected.', 'needs_revision', 'rubric-v1'
+      FROM public.education_submissions s
+     WHERE s.assessment_id = '70000000-0000-4000-8000-000000000001'
+       AND s.learner_user_id = '10000000-0000-4000-8000-000000000001';
+  EXCEPTION WHEN insufficient_privilege THEN blocked := true;
+  END;
+  IF NOT blocked THEN RAISE EXCEPTION 'SECURITY FAILURE: learner reviewed their own submission'; END IF;
+END
+$test$;
+
+-- The authorised reviewer may record rubric-scored feedback with a revision decision.
+RESET ROLE;
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000003', true);
+SELECT set_config('request.jwt.claim.role', 'authenticated', true);
+SELECT set_config('request.jwt.claims', '{"sub":"10000000-0000-4000-8000-000000000003","role":"authenticated"}', true);
+
+INSERT INTO public.education_assessment_reviews
+  (submission_id, cohort_id, reviewer_user_id, score, max_score, feedback, outcome, rubric_version)
+SELECT s.id, s.cohort_id, '10000000-0000-4000-8000-000000000003',
+       80, 100, 'Add a source for your key claim and clarify the evidence.', 'needs_revision', 'rubric-v1'
+FROM public.education_submissions s
+WHERE s.assessment_id = '70000000-0000-4000-8000-000000000001'
+  AND s.learner_user_id = '10000000-0000-4000-8000-000000000001';
+
+-- A learner can submit a second attempt only after a reviewer requests revision.
+RESET ROLE;
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true);
+SELECT set_config('request.jwt.claim.role', 'authenticated', true);
+SELECT set_config('request.jwt.claims', '{"sub":"10000000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+
+INSERT INTO public.education_submissions
+  (assessment_id, cohort_id, enrollment_id, learner_user_id, attempt_number, submission_text)
+VALUES
+  ('70000000-0000-4000-8000-000000000001',
+   '30000000-0000-4000-8000-000000000001',
+   '50000000-0000-4000-8000-000000000001',
+   '10000000-0000-4000-8000-000000000001', 2,
+   'Revised evidence with source attribution and a clear explanation of the finding.');
+
+-- Attempt three is blocked while attempt two is awaiting review.
+DO $test$
+DECLARE blocked boolean := false;
+BEGIN
+  BEGIN
+    INSERT INTO public.education_submissions
+      (assessment_id, cohort_id, enrollment_id, learner_user_id, attempt_number, submission_text)
+    VALUES
+      ('70000000-0000-4000-8000-000000000001',
+       '30000000-0000-4000-8000-000000000001',
+       '50000000-0000-4000-8000-000000000001',
+       '10000000-0000-4000-8000-000000000001', 3,
+       'This third attempt must be rejected until the second is reviewed.');
+  EXCEPTION WHEN check_violation THEN blocked := true;
+  END;
+  IF NOT blocked THEN RAISE EXCEPTION 'SECURITY FAILURE: resubmission bypassed review gate'; END IF;
+END
+$test$;
+
+-- Switch back to an administrator for attendance and certificate tests.
+RESET ROLE;
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000003', true);
+SELECT set_config('request.jwt.claim.role', 'authenticated', true);
+SELECT set_config('request.jwt.claims', '{"sub":"10000000-0000-4000-8000-000000000003","role":"authenticated"}', true);
+
 -- Attendance is tied to the correct published session and enrolment.
 INSERT INTO public.education_attendance
   (session_id, cohort_id, enrollment_id, learner_user_id, attendance_status, recorded_by, recorded_at)
