@@ -238,6 +238,7 @@ export default async function MyEducationApplicationsPage() {
                       <div style={{ display: "flex", gap: 15, flexWrap: "wrap", color: "var(--text-muted)", fontSize: 11, marginTop: 12 }}>
                         <span>Submitted {formatDateTime(application.submitted_at)}</span>
                         <span>Consent version {application.consent_version}</span>
+                        {program && <Link href={`/education/privacy/${program.slug}`} style={{ color: "var(--brand-secondary)", textDecoration: "none", fontWeight: 700 }}>View privacy notice ↗</Link>}
                       </div>
 
                       {application.status === "accepted" && linkedEnrollments.length === 0 && <p style={{ marginTop: 14, color: "var(--text-secondary)", fontSize: 12, lineHeight: 1.7 }}>Your application is accepted. Cohort assignment is still pending; the Foundation will publish enrolment and session details when assigned.</p>}
