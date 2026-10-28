@@ -16,12 +16,23 @@ VALUES
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.education_programs
-  (id, slug, title, summary, languages, delivery_mode, eligibility, capacity, status, created_by)
+  (id, slug, title, summary, languages, delivery_mode, eligibility, capacity,
+   application_opens_at, application_closes_at, status, created_by,
+   privacy_notice_version, privacy_contact_email, retention_statement,
+   privacy_notice_attested_by, privacy_notice_attested_at,
+   safeguarding_owner_user_id, lms_course_ref,
+   launch_ready_attested_by, launch_ready_attested_at)
 VALUES
   ('20000000-0000-4000-8000-000000000001',
    'test-program', 'Test Education Programme', 'Synthetic CI-only programme',
-   ARRAY['en','kn','hi'], 'hybrid', 'CI test identity only', 50, 'published',
-   '10000000-0000-4000-8000-000000000003')
+   ARRAY['en','kn','hi'], 'hybrid', 'CI test identity only', 50,
+   now() - interval '1 day', now() + interval '10 days', 'published',
+   '10000000-0000-4000-8000-000000000003',
+   'test-v1', 'privacy@example.test',
+   'Synthetic CI data is removed at the end of this isolated test transaction.',
+   '10000000-0000-4000-8000-000000000003', now(),
+   '10000000-0000-4000-8000-000000000003', 'moodle-test-course-001',
+   '10000000-0000-4000-8000-000000000003', now())
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.education_cohorts
@@ -165,13 +176,39 @@ BEGIN
 END
 $test$;
 
--- Admin can approve completion; certificate issuance is blocked before approval and allowed after.
+-- Admin can review an application through the atomic, audited status-transition RPC.
 RESET ROLE;
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000003', true);
 SELECT set_config('request.jwt.claim.role', 'authenticated', true);
 SELECT set_config('request.jwt.claims', '{"sub":"10000000-0000-4000-8000-000000000003","role":"authenticated"}', true);
 
+SELECT public.review_education_application(
+  '40000000-0000-4000-8000-000000000001', 'under_review', 'Synthetic CI reviewer note'
+);
+SELECT public.review_education_application(
+  '40000000-0000-4000-8000-000000000001', 'accepted', 'Synthetic CI acceptance'
+);
+
+DO $test$
+DECLARE review_count integer;
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM public.education_applications
+     WHERE id = '40000000-0000-4000-8000-000000000001' AND status = 'accepted'
+  ) THEN RAISE EXCEPTION 'Functional regression: authorised review did not update application'; END IF;
+
+  SELECT count(*) INTO review_count
+    FROM public.education_application_reviews
+   WHERE application_id = '40000000-0000-4000-8000-000000000001'
+     AND reviewer_user_id = '10000000-0000-4000-8000-000000000003';
+  IF review_count <> 2 THEN
+    RAISE EXCEPTION 'Functional regression: application status history is incomplete';
+  END IF;
+END
+$test$;
+
+-- Admin can approve completion; certificate issuance is blocked before approval and allowed after.
 DO $test$
 DECLARE blocked boolean := false;
 BEGIN
