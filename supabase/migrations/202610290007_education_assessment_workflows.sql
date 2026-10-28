@@ -102,10 +102,14 @@ BEGIN
         USING ERRCODE = '23514';
     END IF;
 
-    IF NEW.due_at IS NOT NULL
-       AND (TG_OP = 'INSERT'
-         OR OLD.status IS DISTINCT FROM 'published'
-         OR NEW.due_at IS DISTINCT FROM OLD.due_at)
+    IF NEW.due_at IS NULL THEN
+      RAISE EXCEPTION 'A published assessment requires a deadline'
+        USING ERRCODE = '23514';
+    END IF;
+
+    IF (TG_OP = 'INSERT'
+        OR OLD.status IS DISTINCT FROM 'published'
+        OR NEW.due_at IS DISTINCT FROM OLD.due_at)
        AND NEW.due_at <= now() THEN
       RAISE EXCEPTION 'A newly published assessment or changed deadline must be in the future'
         USING ERRCODE = '23514';
