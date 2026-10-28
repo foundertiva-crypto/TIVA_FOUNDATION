@@ -1,0 +1,58 @@
+name: TIVA Foundation education pilot CI
+
+on:
+  push:
+    branches:
+      - feat/tiva-education-foundation-pilot-20261029
+  pull_request:
+    branches:
+      - master
+    paths:
+      - "src/**"
+      - "supabase/**"
+      - "docs/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/education-pilot-ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: education-pilot-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Lint, build and runtime dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Build-time placeholders only. Never use production tokens in CI.
+      NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: build-only-not-a-real-key
+      SUPABASE_SERVICE_ROLE_KEY: build-only-not-a-real-secret
+      UPSTASH_REDIS_REST_URL: https://placeholder.upstash.io
+      UPSTASH_REDIS_REST_TOKEN: build-only-not-a-real-token
+      TURNSTILE_SECRET_KEY: build-only-not-a-real-secret
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Production build
+        run: npm run build
+
+      - name: Fail on high or critical runtime dependency advisories
+        run: npm audit --omit=dev --audit-level=high
