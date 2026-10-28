@@ -95,23 +95,20 @@ BEGIN
 END
 $test$;
 
--- Learner A cannot read Learner B's application or promote their own submission to accepted.
+-- Learner A cannot read Learner B's application or promote their own application to accepted.
+UPDATE public.education_applications
+   SET status = 'accepted'
+ WHERE id = '40000000-0000-4000-8000-000000000001';
+
 DO $test$
-DECLARE blocked boolean := false;
 BEGIN
   IF EXISTS (SELECT 1 FROM public.education_applications WHERE id = '40000000-0000-4000-8000-000000000002') THEN
     RAISE EXCEPTION 'SECURITY FAILURE: learner can read another learner application';
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM public.education_applications WHERE id = '40000000-0000-4000-8000-000000000001') THEN
-    RAISE EXCEPTION 'Functional regression: learner cannot read own application';
+  IF NOT EXISTS (SELECT 1 FROM public.education_applications
+    WHERE id = '40000000-0000-4000-8000-000000000001' AND status = 'submitted') THEN
+    RAISE EXCEPTION 'SECURITY FAILURE: learner self-approved application or cannot read own submitted application';
   END IF;
-  BEGIN
-    UPDATE public.education_applications
-       SET status = 'accepted'
-     WHERE id = '40000000-0000-4000-8000-000000000001';
-  EXCEPTION WHEN insufficient_privilege THEN blocked := true;
-  END;
-  IF NOT blocked THEN RAISE EXCEPTION 'SECURITY FAILURE: learner self-approved application'; END IF;
 END
 $test$;
 
