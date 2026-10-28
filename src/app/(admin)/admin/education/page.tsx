@@ -301,6 +301,7 @@ export default async function EducationAdminPage({
         <Link href="/admin/education/applications" className="btn-primary" style={{ textDecoration: "none", display: "inline-flex", gap: 8, alignItems: "center" }}>Application review ↗</Link>
         <Link href="/admin/education/cohorts" className="btn-primary" style={{ textDecoration: "none", display: "inline-flex", gap: 8, alignItems: "center" }}>Cohorts & sessions ↗</Link>
         <Link href="/admin/education/attendance" className="btn-primary" style={{ textDecoration: "none", display: "inline-flex", gap: 8, alignItems: "center" }}>Attendance register ↗</Link>
+        <Link href="/admin/education/assessments" className="btn-primary" style={{ textDecoration: "none", display: "inline-flex", gap: 8, alignItems: "center" }}>Assessments & reviews ↗</Link>
       </section>
 
       <section style={{ marginTop: 28 }}>
