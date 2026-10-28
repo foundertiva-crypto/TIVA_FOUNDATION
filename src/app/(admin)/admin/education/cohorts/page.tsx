@@ -1,3 +1,4 @@
+import { requireEducationAdmin } from "@/lib/education/admin-guard";
 import Link from "next/link";
 import type { CSSProperties } from "react";
 import {
@@ -121,6 +122,7 @@ function formatDateTime(value: string) {
 function humanize(value: string) { return value.replaceAll("_", " "); }
 
 export default async function EducationCohortsPage({ searchParams }: Props) {
+  await requireEducationAdmin();
   const query = await searchParams;
   let ready = false;
   let programs: Program[] = [];
