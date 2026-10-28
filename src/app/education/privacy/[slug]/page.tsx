@@ -38,7 +38,7 @@ export default async function EducationPrivacyPage({ params }: Props) {
         <div style={{ display: "grid", gap: 18, marginTop: 24, color: "var(--text-secondary)", fontSize: 14, lineHeight: 1.8 }}>
           <section>
             <h3 style={{ color: "var(--text-primary)", fontSize: 15, fontWeight: 800, marginBottom: 6 }}>Who is responsible</h3>
-            <p>TIVA World Foundation is responsible for managing this programme application. The programme owner should keep the Foundation's approved privacy notice and contact details current before the application window opens.</p>
+            <p>TIVA World Foundation is responsible for managing this programme application. The programme owner should keep the Foundation&apos;s approved privacy notice and contact details current before the application window opens.</p>
           </section>
           <section>
             <h3 style={{ color: "var(--text-primary)", fontSize: 15, fontWeight: 800, marginBottom: 6 }}>Information collected</h3>
@@ -55,7 +55,7 @@ export default async function EducationPrivacyPage({ params }: Props) {
           <section>
             <h3 style={{ color: "var(--text-primary)", fontSize: 15, fontWeight: 800, marginBottom: 6 }}>Retention</h3>
             <p>{program.retention_statement}</p>
-            <p style={{ marginTop: 8 }}>The programme owner should ensure this statement is consistent with the Foundation's approved retention schedule and any legal or funding obligations before applications open.</p>
+            <p style={{ marginTop: 8 }}>The programme owner should ensure this statement is consistent with the Foundation&apos;s approved retention schedule and any legal or funding obligations before applications open.</p>
           </section>
           <section>
             <h3 style={{ color: "var(--text-primary)", fontSize: 15, fontWeight: 800, marginBottom: 6 }}>Your choices and privacy contact</h3>
