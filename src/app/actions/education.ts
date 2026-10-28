@@ -1077,3 +1077,40 @@ export async function reviewEducationSubmission(formData: FormData): Promise<nev
     revalidatePath("/education/learning");
     redirect("/admin/education/assessments?reviewed=1");
 }
+
+
+export async function issueEducationCompletionCertificate(formData: FormData): Promise<never> {
+    const sessionClient = await createClient();
+    const { data: { user } } = await sessionClient.auth.getUser();
+    if (!user) redirect("/login");
+
+    const { data: profile, error: profileError } = await sessionClient
+        .from("profiles").select("role").eq("id", user.id).single();
+    if (profileError || profile?.role !== "admin") redirect("/dashboard");
+
+    const enrollmentId = String(formData.get("enrollment_id") ?? "").trim();
+    const awardTitle = String(formData.get("award_title") ?? "").trim();
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+    if (!uuidPattern.test(enrollmentId)) redirect("/admin/education/certificates?error=invalid-reference");
+    if (awardTitle.length < 3 || awardTitle.length > 180) redirect("/admin/education/certificates?error=invalid-title");
+
+    const { error } = await sessionClient.rpc("approve_education_completion_and_issue_certificate", {
+        p_enrollment_id: enrollmentId,
+        p_award_title: awardTitle,
+    });
+
+    if (error) {
+        if (error.code === "42501") redirect("/admin/education/certificates?error=not-authorized");
+        if (error.code === "P0002") redirect("/admin/education/certificates?error=enrollment-unavailable");
+        if (error.code === "23514") redirect("/admin/education/certificates?error=evidence-required");
+        if (error.code === "22023") redirect("/admin/education/certificates?error=invalid-title");
+        if (error.code === "PGRST202" || error.code === "42883") redirect("/admin/education/certificates?error=migration-required");
+        redirect("/admin/education/certificates?error=issue-failed");
+    }
+
+    revalidatePath("/admin/education/certificates");
+    revalidatePath("/education/my-applications");
+    revalidatePath("/education/learning");
+    redirect("/admin/education/certificates?issued=1");
+}
