@@ -401,29 +401,80 @@ BEGIN
 END
 $test$;
 
-UPDATE public.education_enrollments
-   SET status = 'completed',
-       completion_approved_by = '10000000-0000-4000-8000-000000000003',
-       completion_approved_at = now()
- WHERE id = '50000000-0000-4000-8000-000000000001';
+-- Completion is blocked while the latest assessment review requests a revision.
+DO $test$
+DECLARE blocked boolean := false;
+BEGIN
+  BEGIN
+    UPDATE public.education_enrollments
+       SET status = 'completed',
+           completion_approved_by = '10000000-0000-4000-8000-000000000003',
+           completion_approved_at = now()
+     WHERE id = '50000000-0000-4000-8000-000000000001';
+  EXCEPTION WHEN check_violation THEN blocked := true;
+  END;
+  IF NOT blocked THEN
+    RAISE EXCEPTION 'SECURITY FAILURE: completion bypassed unresolved assessment evidence';
+  END IF;
+END
+$test$;
 
-INSERT INTO public.education_certificates
-  (program_id, cohort_id, enrollment_id, learner_user_id, award_title, issued_by)
-VALUES
-  ('20000000-0000-4000-8000-000000000001',
-   '30000000-0000-4000-8000-000000000001',
-   '50000000-0000-4000-8000-000000000001',
-   '10000000-0000-4000-8000-000000000001',
-   'Test Completion', '10000000-0000-4000-8000-000000000003');
+-- Mark the latest attempt accepted with a score matching the published rubric.
+INSERT INTO public.education_assessment_reviews
+  (submission_id, cohort_id, reviewer_user_id, score, max_score, feedback, outcome, rubric_version)
+SELECT s.id, s.cohort_id, '10000000-0000-4000-8000-000000000003',
+       96, 100, 'Final revision satisfies the published rubric and evidence requirements.', 'accepted', 'rubric-v1'
+FROM public.education_submissions s
+WHERE s.assessment_id = '70000000-0000-4000-8000-000000000001'
+  AND s.learner_user_id = '10000000-0000-4000-8000-000000000001'
+  AND s.attempt_number = 2;
+
+-- The database RPC atomically approves the learner and issues one certificate.
+SELECT public.approve_education_completion_and_issue_certificate(
+  '50000000-0000-4000-8000-000000000001',
+  'Test Completion'
+);
 
 DO $test$
-DECLARE n integer;
+DECLARE
+  n integer;
+  v_code uuid;
+  v_verified boolean;
+  v_award text;
+  v_program text;
+  v_status text;
 BEGIN
-  SELECT count(*) INTO n FROM public.education_certificates
-   WHERE enrollment_id = '50000000-0000-4000-8000-000000000001'
-     AND learner_user_id = '10000000-0000-4000-8000-000000000001'
-     AND status = 'issued';
-  IF n <> 1 THEN RAISE EXCEPTION 'Functional regression: approved certificate issue failed'; END IF;
+  SELECT count(*), min(verification_code::text)::uuid
+    INTO n, v_code
+  FROM public.education_certificates
+  WHERE enrollment_id = '50000000-0000-4000-8000-000000000001'
+    AND learner_user_id = '10000000-0000-4000-8000-000000000001'
+    AND status = 'issued';
+  IF n <> 1 OR v_code IS NULL THEN
+    RAISE EXCEPTION 'Functional regression: approved certificate issue failed';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM public.education_enrollments
+    WHERE id = '50000000-0000-4000-8000-000000000001'
+      AND status = 'completed'
+      AND completion_approved_by = '10000000-0000-4000-8000-000000000003'
+      AND completion_approved_at IS NOT NULL
+  ) THEN
+    RAISE EXCEPTION 'Functional regression: completion approval was not recorded';
+  END IF;
+
+  SELECT verified, award_title, program_title, certificate_status
+    INTO v_verified, v_award, v_program, v_status
+  FROM public.verify_education_certificate(v_code);
+
+  IF NOT v_verified OR v_award <> 'Test Completion'
+     OR v_program <> 'Test Education Programme'
+     OR v_status <> 'issued' THEN
+    RAISE EXCEPTION 'Functional regression: public certificate verification failed';
+  END IF;
+
+  PERFORM set_config('tiva_test.certificate_code', v_code::text, true);
 END
 $test$;
 
@@ -435,7 +486,10 @@ SELECT set_config('request.jwt.claim.role', 'anon', true);
 SELECT set_config('request.jwt.claims', '{"role":"anon"}', true);
 
 DO $test$
-DECLARE can_see_applications boolean := false;
+DECLARE
+  can_see_applications boolean := false;
+  v_verified boolean;
+  v_status text;
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM public.education_programs
@@ -450,6 +504,14 @@ BEGIN
 
   IF can_see_applications THEN
     RAISE EXCEPTION 'SECURITY FAILURE: anonymous request can see applicant records';
+  END IF;
+
+  SELECT verified, certificate_status
+    INTO v_verified, v_status
+  FROM public.verify_education_certificate(current_setting('tiva_test.certificate_code', true)::uuid);
+
+  IF NOT v_verified OR v_status <> 'issued' THEN
+    RAISE EXCEPTION 'SECURITY FAILURE: anonymous certificate verification did not return the valid public status';
   END IF;
 END
 $test$;
