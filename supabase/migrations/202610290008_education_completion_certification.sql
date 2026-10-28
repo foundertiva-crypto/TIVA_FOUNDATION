@@ -7,12 +7,11 @@ CREATE OR REPLACE FUNCTION public.tiva_guard_education_completion_evidence()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY INVOKER
-SET search_path = public, auth
+SET search_path = pg_catalog, public, auth
 AS $function$
 DECLARE
   due_session_count bigint := 0;
   required_assessment_count bigint := 0;
-  trusted_actor boolean := false;
 BEGIN
   IF NEW.status <> 'completed' THEN
     RETURN NEW;
