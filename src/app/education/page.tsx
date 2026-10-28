@@ -25,12 +25,6 @@ function formatDate(value: string | null) {
   }).format(date);
 }
 
-function isAccepting(program: Programme, now: number) {
-  const opens = program.application_opens_at ? Date.parse(program.application_opens_at) : Number.NaN;
-  const closes = program.application_closes_at ? Date.parse(program.application_closes_at) : Number.NaN;
-  return Number.isFinite(opens) && Number.isFinite(closes) && opens <= now && closes > now;
-}
-
 export default async function EducationCataloguePage() {
   let programmes: Programme[] = [];
   let unavailable = false;
@@ -49,8 +43,6 @@ export default async function EducationCataloguePage() {
   } catch {
     unavailable = true;
   }
-
-  const now = Date.now();
 
   return (
     <main style={{ minHeight: "100vh", background: "var(--bg-primary)", color: "var(--text-primary)", padding: "clamp(20px, 4vw, 48px)" }}>
@@ -86,12 +78,11 @@ export default async function EducationCataloguePage() {
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 310px), 1fr))", gap: 16 }}>
             {programmes.map((program) => {
-              const accepting = isAccepting(program, now);
               return (
                 <article key={program.id} style={{ display: "flex", flexDirection: "column", border: "1px solid var(--border-subtle)", borderRadius: 18, background: "var(--bg-card)", padding: 22, minHeight: 300 }}>
                   <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
                     <span style={{ width: 42, height: 42, display: "grid", placeItems: "center", borderRadius: 12, background: "rgba(108,92,231,.14)", color: "#9A8CFF" }}><GraduationCap size={21} /></span>
-                    <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: accepting ? "#00C987" : "#D4A72C", border: `1px solid ${accepting ? "rgba(0,201,135,.35)" : "rgba(212,167,44,.35)"}`, borderRadius: 999, padding: "5px 8px" }}>{accepting ? "Applications open" : "Not accepting now"}</span>
+                    <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "#00C987", border: "1px solid rgba(0,201,135,.35)", borderRadius: 999, padding: "5px 8px" }}>Published</span>
                   </div>
                   <h2 style={{ fontSize: 20, fontWeight: 800, marginTop: 17, lineHeight: 1.3 }}>{program.title}</h2>
                   {program.summary && <p style={{ color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.7, marginTop: 9 }}>{program.summary}</p>}
@@ -102,11 +93,7 @@ export default async function EducationCataloguePage() {
                     <span style={{ display: "flex", alignItems: "center", gap: 8 }}><CalendarDays size={14} /> Closes: {formatDate(program.application_closes_at)}</span>
                   </div>
                   <div style={{ marginTop: "auto", paddingTop: 18 }}>
-                    {accepting ? (
-                      <Link href={`/education/apply/${program.slug}`} className="btn-primary" style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 8, textDecoration: "none" }}>View programme & apply <ArrowRight size={16} /></Link>
-                    ) : (
-                      <p style={{ color: "var(--text-muted)", fontSize: 12, lineHeight: 1.6 }}>The application window is closed, has not opened yet, or has not been configured.</p>
-                    )}
+                    <Link href={`/education/apply/${program.slug}`} className="btn-primary" style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 8, textDecoration: "none" }}>View programme & application status <ArrowRight size={16} /></Link>
                   </div>
                 </article>
               );
