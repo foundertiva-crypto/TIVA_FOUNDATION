@@ -97,7 +97,7 @@ function VerifyForm() {
         // Resume only the approved, same-origin education application flow.
         const requestedNext = sessionStorage.getItem("otp_next");
         sessionStorage.removeItem("otp_next");
-        if (requestedNext && /^\\/education\\/apply\\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(requestedNext)) {
+        if (requestedNext && /^\/education\/apply\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(requestedNext)) {
             router.push(requestedNext);
             return;
         }
