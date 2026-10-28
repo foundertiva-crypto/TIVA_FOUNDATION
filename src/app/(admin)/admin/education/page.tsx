@@ -37,7 +37,7 @@ async function getEducationSnapshot(): Promise<EducationSnapshot> {
     const admin = createAdminClient();
     const [programs, applications, cohorts, enrollments] = await Promise.all([
       admin.from("education_programs")
-        .select("id,title,slug,summary,status,capacity,delivery_mode,languages,created_at")
+        .select("id,title,slug,summary,status,capacity,delivery_mode,languages,created_at", { count: "exact" })
         .order("created_at", { ascending: false })
         .limit(100),
       admin.from("education_applications").select("id", { count: "exact", head: true }),
