@@ -184,7 +184,6 @@ export async function submitEducationApplication(formData: FormData): Promise<ne
     const { data: { user } } = await sessionClient.auth.getUser();
 
     if (!user) redirect(`/login?next=${encodeURIComponent(applicationPath)}`);
-    if (!user.email) redirect(`${applicationPath}?error=email-required`);
 
     const { allowed } = await checkRateLimit(educationApplicationLimiter, `${user.id}:${slug}`);
     if (!allowed) redirect(`${applicationPath}?error=rate-limited`);
