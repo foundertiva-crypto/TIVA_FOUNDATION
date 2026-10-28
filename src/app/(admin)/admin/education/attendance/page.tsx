@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { CSSProperties } from "react";
-import { AlertTriangle, ArrowLeft, CalendarCheck, ClipboardCheck, Clock3, ShieldCheck } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Clock3, ShieldCheck } from "lucide-react";
 import { recordEducationAttendance } from "@/app/actions/education";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -14,7 +14,6 @@ type Session = {
 };
 type Cohort = { id: string; program_id: string; title: string; status: string; timezone: string };
 type Enrollment = { id: string; cohort_id: string; learner_user_id: string; status: string };
-type Profile = { id: string; full_name: string | null };
 type Attendance = {
   id: string;
   session_id: string;
@@ -74,7 +73,7 @@ export default async function EducationAttendanceAdminPage({ searchParams }: Pro
   let cohorts: Cohort[] = [];
   let enrollments: Enrollment[] = [];
   let profiles = new Map<string,string>();
-  let attendance = new Map<string,Attendance>();
+  const attendance = new Map<string,Attendance>();
 
   try {
     const admin = createAdminClient();
