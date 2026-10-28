@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, BookOpenCheck, CalendarDays, CheckCircle2, Clock3, FileText, GraduationCap, ShieldCheck } from "lucide-react";
+import { AlertTriangle, ArrowLeft, BookOpenCheck, CalendarDays, CheckCircle2, Clock3, FileText, GraduationCap, ShieldCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { submitEducationWork } from "@/app/actions/education";
 
@@ -35,9 +35,6 @@ function formatDateTime(value: string) {
   return Number.isNaN(date.getTime()) ? "Date unavailable" : new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" }).format(date);
 }
 function humanize(value: string) { return value.replaceAll("_", " "); }
-function deadlineOpen(value: string | null) {
-  return value === null || Date.parse(value) > Date.now();
-}
 function rubricItems(value: unknown): Array<{title:string;max_points:number}> {
   if (!Array.isArray(value)) return [];
   return value.filter((item): item is {title:string;max_points:number} =>
