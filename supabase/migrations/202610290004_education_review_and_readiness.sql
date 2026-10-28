@@ -136,6 +136,15 @@ BEGIN
   END IF;
 
   IF NEW.status = 'published' THEN
+    -- Even after a programme has been published, retain a defined application
+    -- window. An elapsed close date is allowed; null or inverted bounds are not.
+    IF NEW.application_opens_at IS NULL
+       OR NEW.application_closes_at IS NULL
+       OR NEW.application_opens_at >= NEW.application_closes_at THEN
+      RAISE EXCEPTION 'A published programme must retain a valid application opening and closing window'
+        USING ERRCODE = '23514';
+    END IF;
+
     IF NEW.privacy_notice_version IS NULL OR length(trim(NEW.privacy_notice_version)) = 0
        OR NEW.privacy_contact_email IS NULL
        OR length(trim(NEW.privacy_contact_email)) > 254
