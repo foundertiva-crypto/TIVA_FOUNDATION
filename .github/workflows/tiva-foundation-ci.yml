@@ -1,0 +1,88 @@
+name: TIVA Foundation CI
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master, "feat/tiva-education-foundation-pilot-20261029"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tiva-foundation-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  database-security:
+    name: PostgreSQL schema and RLS tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: tiva_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d tiva_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: tiva_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+      - name: Bootstrap disposable Supabase auth schema
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/bootstrap-test-db.sql
+      - name: Apply existing schema and policies
+        run: |
+          psql -v ON_ERROR_STOP=1 -f supabase/schema.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/rls_policies.sql
+      - name: Apply migrations in filename order
+        shell: bash
+        run: |
+          shopt -s nullglob
+          migrations=(supabase/migrations/*.sql)
+          if (( ${#migrations[@]} == 0 )); then
+            echo "No migrations found" >&2
+            exit 1
+          fi
+          for migration in "${migrations[@]}"; do
+            echo "::group::Apply ${migration}"
+            psql -v ON_ERROR_STOP=1 -f "${migration}"
+            echo "::endgroup::"
+          done
+      - name: Run education and profile security smoke tests
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/education-security-smoke.sql
+
+  application:
+    name: Next.js lint, type check and production build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npx tsc --noEmit
+      - name: Build production app
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: test-public-anon-key
+          SUPABASE_SERVICE_ROLE_KEY: test-only-placeholder
+          NEXT_TELEMETRY_DISABLED: 1
+        run: npm run build

@@ -94,6 +94,14 @@ function VerifyForm() {
 
         sessionStorage.removeItem("otp_phone");
 
+        // Resume only the approved, same-origin education application flow.
+        const requestedNext = sessionStorage.getItem("otp_next");
+        sessionStorage.removeItem("otp_next");
+        if (requestedNext && /^\/education\/(?:my-applications|learning|apply\/[a-z0-9]+(?:-[a-z0-9]+)*)$/.test(requestedNext)) {
+            router.push(requestedNext);
+            return;
+        }
+
         // Check user role to redirect admins to admin dashboard
         const supabase = createClient();
         const { data: { user: currentUser } } = await supabase.auth.getUser();
