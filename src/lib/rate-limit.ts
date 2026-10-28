@@ -47,6 +47,9 @@ export const verifyLimiter = createLimiter(5, "1 m", "ratelimit:verify");
 /** registerWithReferral — 10 req/hr per user */
 export const referralLimiter = createLimiter(10, "1 h", "ratelimit:referral");
 
+/** Education applications — 5 submissions/hour per authenticated user and programme. */
+export const educationApplicationLimiter = createLimiter(5, "1 h", "ratelimit:education-application");
+
 /** startChallenge / restartChallenge — 5 req/hr per user */
 export const challengeLimiter = createLimiter(5, "1 h", "ratelimit:challenge");
 
