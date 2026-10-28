@@ -122,7 +122,7 @@ BEGIN
     COALESCE(current_setting('request.jwt.claim.role', true), '') = 'service_role'
     OR current_user IN ('postgres','supabase_admin');
 
-  IF NEW.status = 'published' AND (TG_OP = 'INSERT' OR OLD.status IS DISTINCT FROM 'published') THEN
+  IF NEW.status = 'published' THEN
     IF NEW.privacy_notice_version IS NULL OR length(trim(NEW.privacy_notice_version)) = 0
        OR NEW.privacy_notice_attested_by IS NULL OR NEW.privacy_notice_attested_at IS NULL
        OR NEW.safeguarding_owner_user_id IS NULL
@@ -133,10 +133,16 @@ BEGIN
     END IF;
 
     IF NOT trusted_role THEN
-      IF NEW.launch_ready_attested_by IS DISTINCT FROM auth.uid()
-         OR NEW.privacy_notice_attested_by IS DISTINCT FROM auth.uid() THEN
-        RAISE EXCEPTION 'Readiness attestation must match the signed-in administrator'
-          USING ERRCODE = '42501';
+      IF TG_OP = 'INSERT'
+         OR OLD.status IS DISTINCT FROM 'published'
+         OR NEW.privacy_notice_version IS DISTINCT FROM OLD.privacy_notice_version
+         OR NEW.safeguarding_owner_user_id IS DISTINCT FROM OLD.safeguarding_owner_user_id
+         OR NEW.lms_course_ref IS DISTINCT FROM OLD.lms_course_ref THEN
+        IF NEW.launch_ready_attested_by IS DISTINCT FROM auth.uid()
+           OR NEW.privacy_notice_attested_by IS DISTINCT FROM auth.uid() THEN
+          RAISE EXCEPTION 'Readiness attestation must match the signed-in administrator'
+            USING ERRCODE = '42501';
+        END IF;
       END IF;
       IF NOT public.is_admin() THEN
         RAISE EXCEPTION 'Publishing education programmes requires a Foundation administrator'
