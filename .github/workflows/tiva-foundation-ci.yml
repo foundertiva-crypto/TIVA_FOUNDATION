@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: tiva-foundation-ci-\${{ github.ref }}
+  group: tiva-foundation-ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -55,13 +55,13 @@ jobs:
         run: |
           shopt -s nullglob
           migrations=(supabase/migrations/*.sql)
-          if (( \${#migrations[@]} == 0 )); then
+          if (( ${#migrations[@]} == 0 )); then
             echo "No migrations found" >&2
             exit 1
           fi
-          for migration in "\${migrations[@]}"; do
-            echo "::group::Apply \${migration}"
-            psql -v ON_ERROR_STOP=1 -f "\${migration}"
+          for migration in "${migrations[@]}"; do
+            echo "::group::Apply ${migration}"
+            psql -v ON_ERROR_STOP=1 -f "${migration}"
             echo "::endgroup::"
           done
       - name: Run education and profile security smoke tests
