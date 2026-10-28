@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { CSSProperties } from "react";
-import { AlertTriangle, ArrowLeft, BookOpenCheck, CheckCircle2, ClipboardCheck, ExternalLink, FileText, GraduationCap, Star } from "lucide-react";
+import { AlertTriangle, ArrowLeft, BookOpenCheck, ExternalLink, FileText, Star } from "lucide-react";
 import {
   createEducationAssessment,
   reviewEducationSubmission,
