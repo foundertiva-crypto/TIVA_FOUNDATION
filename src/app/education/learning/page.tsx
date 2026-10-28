@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { CSSProperties } from "react";
 import { AlertTriangle, ArrowLeft, BookOpenCheck, CalendarDays, CheckCircle2, Clock3, FileText, GraduationCap, ShieldCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { submitEducationWork } from "@/app/actions/education";
@@ -48,6 +49,18 @@ const statusColor: Record<string,string> = {
   needs_revision:"#D4A72C", accepted:"#00C987", not_passed:"#F97373", pending_review:"#60A5FA",
   active:"#00C987", enrolled:"#60A5FA", completed:"#00C987", incomplete:"#D4A72C",
 };
+const inputStyle: CSSProperties = {
+  width: "100%",
+  minHeight: 42,
+  border: "1px solid var(--border-accent)",
+  borderRadius: 9,
+  padding: "10px 12px",
+  background: "var(--bg-secondary)",
+  color: "var(--text-primary)",
+  outline: "none",
+  fontSize: 12,
+};
+
 function StatusPill({ value }: { value: string }) {
   const color = statusColor[value] ?? "#9CA3AF";
   return <span style={{ display:"inline-flex", border:`1px solid ${color}66`, borderRadius:999, padding:"5px 9px", color, background:`${color}12`, fontSize:10, fontWeight:850, textTransform:"uppercase", letterSpacing:".06em" }}>{humanize(value)}</span>;
