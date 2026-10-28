@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { CSSProperties } from "react";
-import { AlertTriangle, ArrowLeft, Award, CheckCircle2, ExternalLink, ShieldCheck } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Award, ExternalLink, ShieldCheck } from "lucide-react";
 import { issueEducationCompletionCertificate } from "@/app/actions/education";
 import { createAdminClient } from "@/lib/supabase/admin";
 
