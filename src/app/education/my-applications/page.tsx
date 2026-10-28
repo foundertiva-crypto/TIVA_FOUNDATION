@@ -52,6 +52,15 @@ type Attendance = {
   correction_reason: string | null;
   last_corrected_at: string | null;
 };
+type Certificate = {
+  id: string;
+  enrollment_id: string;
+  verification_code: string;
+  award_title: string;
+  status: string;
+  issued_at: string;
+  revoked_at: string | null;
+};
 
 function formatDate(value: string | null) {
   if (!value) return "Not scheduled";
@@ -116,6 +125,7 @@ export default async function MyEducationApplicationsPage() {
   let cohorts = new Map<string,Cohort>();
   let sessions: Session[] = [];
   let attendance = new Map<string,Attendance>();
+  let certificates = new Map<string,Certificate>();
   let loadFailed = false;
 
   try {
@@ -142,6 +152,17 @@ export default async function MyEducationApplicationsPage() {
         .select("id,title,slug,summary").in("id", programIds);
       if (error) throw new Error("Programme details unavailable");
       programs = new Map(((data ?? []) as Program[]).map((program) => [program.id, program]));
+    }
+
+    const enrollmentIds = enrollments.map((enrollment) => enrollment.id);
+    if (enrollmentIds.length > 0) {
+      const { data: certificateRows, error: certificateError } = await supabase
+        .from("education_certificates")
+        .select("id,enrollment_id,verification_code,award_title,status,issued_at,revoked_at")
+        .eq("learner_user_id", user.id)
+        .in("enrollment_id", enrollmentIds);
+      if (certificateError) throw new Error("Certificate status unavailable");
+      certificates = new Map(((certificateRows ?? []) as Certificate[]).map((certificate) => [certificate.enrollment_id, certificate]));
     }
 
     const cohortIds = [...new Set(enrollments.map((enrollment) => enrollment.cohort_id))];
@@ -178,6 +199,7 @@ export default async function MyEducationApplicationsPage() {
     cohorts = new Map();
     sessions = [];
     attendance = new Map();
+    certificates = new Map();
   }
 
   const enrollmentsByApplication = new Map<string,Enrollment[]>();
@@ -259,6 +281,21 @@ export default async function MyEducationApplicationsPage() {
                                 </div>
                                 <StatusPill value={enrollment.status}/>
                               </div>
+                              {certificates.get(enrollment.id) && (() => {
+                                const certificate = certificates.get(enrollment.id)!;
+                                const valid = certificate.status === "issued" && !certificate.revoked_at;
+                                return <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", border: `1px solid ${valid ? "rgba(0,201,135,.35)" : "var(--border-subtle)"}`, borderRadius: 10, padding: 12, marginTop: 12 }}>
+                                  <div>
+                                    <p style={{ fontSize: 13, fontWeight: 800 }}>{certificate.award_title}</p>
+                                    <p style={{ color: "var(--text-muted)", fontSize: 11, marginTop: 4 }}>Certificate issued {formatDateTime(certificate.issued_at)} · {valid ? "Valid" : humanize(certificate.status)}</p>
+                                  </div>
+                                  <Link href={`/education/certificate/${certificate.verification_code}`} className="btn-primary" style={{ display: "inline-flex", alignItems: "center", gap: 7, textDecoration: "none" }}>
+                                    Verify certificate ↗
+                                  </Link>
+                                </div>;
+                              })()}
+                              {!certificates.get(enrollment.id) && enrollment.status === "completed" && <p style={{ color: "var(--text-secondary)", fontSize: 12, lineHeight: 1.7, marginTop: 11 }}>Your enrolment is marked completed. Certificate issuance remains pending an authorised review of the required programme evidence.</p>}
+
                               <div style={{ display: "grid", gap: 9, marginTop: 11 }}>
                                 {cohortSessions.length === 0 ? (
                                   <p style={{ color: "var(--text-muted)", fontSize: 12 }}>No published sessions are available yet.</p>
