@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, BookOpenCheck, CalendarDays, CheckCircle2, Clock3, GraduationCap, ShieldCheck } from "lucide-react";
+import { ArrowLeft, CalendarDays, Clock3, GraduationCap, ShieldCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 
 type EducationApplication = {
