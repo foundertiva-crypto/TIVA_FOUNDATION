@@ -81,7 +81,9 @@ INSERT INTO public.education_assessments
 VALUES
   ('70000000-0000-4000-8000-000000000001',
    '30000000-0000-4000-8000-000000000001', 'Test Assignment',
-   'Synthetic test only', '[]'::jsonb, now() + interval '2 days',
+   'Synthetic test only',
+   '[{"title":"Evidence quality","max_points":25},{"title":"Execution","max_points":25},{"title":"Communication","max_points":25},{"title":"Reflection","max_points":25}]'::jsonb,
+   now() + interval '2 days',
    'published', '10000000-0000-4000-8000-000000000003')
 ON CONFLICT (id) DO NOTHING;
 
