@@ -100,7 +100,6 @@ export async function createEducationProgram(formData: FormData): Promise<never>
 }
 
 
-const applicationConsentVersion = "tiva-world-foundation-education-application-v1";
 const applicationStatuses = new Set([
     "under_review",
     "needs_information",
@@ -142,7 +141,7 @@ export async function attestEducationProgramReadiness(formData: FormData): Promi
     if (!/^[A-Za-z0-9._-]{3,80}$/.test(noticeVersion)) {
         redirect("/admin/education?error=Privacy%20notice%20version%20must%20be%203%E2%80%9380%20letters%2C%20numbers%2C%20dots%2C%20underscores%20or%20hyphens.");
     }
-    if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(privacyContactEmail) || privacyContactEmail.length > 254) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(privacyContactEmail) || privacyContactEmail.length > 254) {
         redirect("/admin/education?error=Enter%20the%20Foundation-approved%20privacy%20contact%20email.");
     }
     if (retentionStatement.length < 20 || retentionStatement.length > 1500) {
@@ -259,7 +258,7 @@ export async function setEducationProgramAvailability(formData: FormData): Promi
     let nextValues: Record<string, string> = {};
     if (mode === "publish") {
         const closingDate = String(formData.get("application_closes_on") ?? "").trim();
-        if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(closingDate)) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(closingDate)) {
             redirect("/admin/education?error=Set%20an%20application%20closing%20date.");
         }
         const closeAt = new Date(`${closingDate}T23:59:59+05:30`);
