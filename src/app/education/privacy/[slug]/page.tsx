@@ -14,7 +14,6 @@ export default async function EducationPrivacyPage({ params }: Props) {
     .from("education_programs")
     .select("slug,title,privacy_notice_version,privacy_contact_email,retention_statement,privacy_notice_attested_at,status")
     .eq("slug", slug)
-    .eq("status", "published")
     .maybeSingle();
 
   if (error || !program || !program.privacy_notice_version
