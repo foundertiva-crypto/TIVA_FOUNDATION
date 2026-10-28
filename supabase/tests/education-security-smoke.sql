@@ -224,17 +224,22 @@ SELECT set_config('request.jwt.claim.role', 'anon', true);
 SELECT set_config('request.jwt.claims', '{"role":"anon"}', true);
 
 DO $test$
+DECLARE can_see_applications boolean := false;
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM public.education_programs
      WHERE id = '20000000-0000-4000-8000-000000000001'
   ) THEN RAISE EXCEPTION 'Functional regression: published programme is not public'; END IF;
+
   BEGIN
-    PERFORM 1 FROM public.education_applications;
-    RAISE EXCEPTION 'SECURITY FAILURE: anonymous request could query applicant records';
+    SELECT EXISTS (SELECT 1 FROM public.education_applications) INTO can_see_applications;
   EXCEPTION WHEN insufficient_privilege THEN
-    NULL;
+    can_see_applications := false;
   END;
+
+  IF can_see_applications THEN
+    RAISE EXCEPTION 'SECURITY FAILURE: anonymous request can see applicant records';
+  END IF;
 END
 $test$;
 
