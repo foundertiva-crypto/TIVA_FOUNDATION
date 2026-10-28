@@ -232,9 +232,9 @@ BEGIN
   v_application_id := NULLIF(v_row ->> 'application_id','')::uuid;
 
   IF TG_TABLE_NAME = 'education_programs' THEN
-    v_program_id := v_entity_id;
+    v_program_id := CASE WHEN TG_OP = 'DELETE' THEN NULL ELSE v_entity_id END;
   ELSIF TG_TABLE_NAME = 'education_cohorts' THEN
-    v_cohort_id := v_entity_id;
+    v_cohort_id := CASE WHEN TG_OP = 'DELETE' THEN NULL ELSE v_entity_id END;
   END IF;
 
   IF v_cohort_id IS NULL AND v_session_id IS NOT NULL THEN
