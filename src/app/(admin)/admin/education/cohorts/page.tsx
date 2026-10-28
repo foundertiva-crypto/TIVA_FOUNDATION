@@ -1,7 +1,8 @@
 import Link from "next/link";
+import type { CSSProperties } from "react";
 import {
   AlertTriangle, ArrowLeft, CalendarDays, Clock3, GraduationCap,
-  Plus, UsersRound, CheckCircle2, ExternalLink
+  Plus, UsersRound, CheckCircle2
 } from "lucide-react";
 import {
   createEducationCohort,
@@ -79,7 +80,7 @@ const errorMessages: Record<string,string> = {
   "session-publish-failed": "Session publishing could not be saved.",
 };
 
-const inputStyle: React.CSSProperties = {
+const inputStyle: CSSProperties = {
   width: "100%", minHeight: 42, border: "1px solid var(--border-accent)",
   borderRadius: 9, padding: "10px 12px", background: "var(--bg-secondary)",
   color: "var(--text-primary)", outline: "none",
