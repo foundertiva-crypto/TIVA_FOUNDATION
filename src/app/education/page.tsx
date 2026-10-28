@@ -62,6 +62,7 @@ export default async function EducationCataloguePage() {
           <div style={{ marginTop: 16, display: "flex", gap: 10, flexWrap: "wrap" }}>
             <span style={{ display: "inline-flex", gap: 7, alignItems: "center", border: "1px solid var(--border-subtle)", borderRadius: 999, padding: "7px 11px", color: "var(--text-secondary)", fontSize: 12 }}><BookOpenCheck size={14} /> English · Kannada · Hindi</span>
             <span style={{ display: "inline-flex", gap: 7, alignItems: "center", border: "1px solid var(--border-subtle)", borderRadius: 999, padding: "7px 11px", color: "var(--text-secondary)", fontSize: 12 }}><ShieldCheck size={14} /> Privacy-gated applications</span>
+            <Link href="/education/my-applications" style={{ display: "inline-flex", gap: 7, alignItems: "center", border: "1px solid var(--border-subtle)", borderRadius: 999, padding: "7px 11px", color: "var(--brand-secondary)", textDecoration: "none", fontSize: 12, fontWeight: 750 }}>My applications ↗</Link>
           </div>
         </header>
 
