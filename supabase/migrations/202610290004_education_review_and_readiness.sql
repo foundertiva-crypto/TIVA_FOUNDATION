@@ -4,6 +4,8 @@ BEGIN;
 
 ALTER TABLE public.education_programs
   ADD COLUMN IF NOT EXISTS privacy_notice_version text,
+  ADD COLUMN IF NOT EXISTS privacy_contact_email text,
+  ADD COLUMN IF NOT EXISTS retention_statement text,
   ADD COLUMN IF NOT EXISTS privacy_notice_attested_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS privacy_notice_attested_at timestamptz,
   ADD COLUMN IF NOT EXISTS safeguarding_owner_user_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
@@ -12,6 +14,8 @@ ALTER TABLE public.education_programs
   ADD COLUMN IF NOT EXISTS launch_ready_attested_at timestamptz;
 
 COMMENT ON COLUMN public.education_programs.privacy_notice_version IS 'Version identifier of the reviewed learner notice presented at application time.';
+COMMENT ON COLUMN public.education_programs.privacy_contact_email IS 'Foundation-approved public contact for learner privacy requests; configured by an authorised admin.';
+COMMENT ON COLUMN public.education_programs.retention_statement IS 'Programme-specific, reviewed retention statement shown before application submission.';
 COMMENT ON COLUMN public.education_programs.safeguarding_owner_user_id IS 'Assigned human escalation owner; not an indication of an external certification.';
 COMMENT ON COLUMN public.education_programs.lms_course_ref IS 'Reference to the separately hosted and verified pilot course.';
 COMMENT ON COLUMN public.education_programs.launch_ready_attested_at IS 'Timestamp when an authorised Foundation admin attested that launch prerequisites were checked.';
@@ -124,6 +128,53 @@ BEGIN
 
   IF NEW.status = 'published' THEN
     IF NEW.privacy_notice_version IS NULL OR length(trim(NEW.privacy_notice_version)) = 0
+       OR NEW.privacy_contact_email IS NULL OR NEW.privacy_contact_email !~ '^[^[:space:]@]+@[^[:space:]@]+\\.[^[:space:]@]+       OR NEW.safeguarding_owner_user_id IS NULL
+       OR NEW.lms_course_ref IS NULL OR length(trim(NEW.lms_course_ref)) = 0
+       OR NEW.launch_ready_attested_by IS NULL OR NEW.launch_ready_attested_at IS NULL THEN
+      RAISE EXCEPTION 'Publication requires a reviewed notice version, assigned safeguarding owner, verified LMS course and recorded launch-readiness attestation'
+        USING ERRCODE = '23514';
+    END IF;
+
+    IF NOT trusted_role THEN
+      IF TG_OP = 'INSERT'
+         OR OLD.status IS DISTINCT FROM 'published'
+         OR NEW.privacy_notice_version IS DISTINCT FROM OLD.privacy_notice_version
+         OR NEW.privacy_contact_email IS DISTINCT FROM OLD.privacy_contact_email
+         OR NEW.retention_statement IS DISTINCT FROM OLD.retention_statement
+         OR NEW.safeguarding_owner_user_id IS DISTINCT FROM OLD.safeguarding_owner_user_id
+         OR NEW.lms_course_ref IS DISTINCT FROM OLD.lms_course_ref THEN
+        IF NEW.launch_ready_attested_by IS DISTINCT FROM auth.uid()
+           OR NEW.privacy_notice_attested_by IS DISTINCT FROM auth.uid() THEN
+          RAISE EXCEPTION 'Readiness attestation must match the signed-in administrator'
+            USING ERRCODE = '42501';
+        END IF;
+      END IF;
+      IF NOT public.is_admin() THEN
+        RAISE EXCEPTION 'Publishing education programmes requires a Foundation administrator'
+          USING ERRCODE = '42501';
+      END IF;
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$function$;
+
+DROP TRIGGER IF EXISTS tiva_guard_education_publication_readiness ON public.education_programs;
+CREATE TRIGGER tiva_guard_education_publication_readiness
+BEFORE INSERT OR UPDATE OF status, privacy_notice_version, privacy_contact_email,
+  retention_statement, privacy_notice_attested_by, privacy_notice_attested_at,
+  safeguarding_owner_user_id, lms_course_ref,
+  launch_ready_attested_by, launch_ready_attested_at
+ON public.education_programs
+FOR EACH ROW EXECUTE FUNCTION public.tiva_guard_education_publication_readiness();
+
+REVOKE ALL ON FUNCTION public.tiva_guard_education_publication_readiness() FROM PUBLIC;
+
+NOTIFY pgrst, 'reload schema';
+COMMIT;
+
+       OR NEW.retention_statement IS NULL OR length(trim(NEW.retention_statement)) < 20
        OR NEW.privacy_notice_attested_by IS NULL OR NEW.privacy_notice_attested_at IS NULL
        OR NEW.safeguarding_owner_user_id IS NULL
        OR NEW.lms_course_ref IS NULL OR length(trim(NEW.lms_course_ref)) = 0
