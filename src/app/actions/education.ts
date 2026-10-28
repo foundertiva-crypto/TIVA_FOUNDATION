@@ -114,6 +114,94 @@ function isValidProgramSlug(value: string): boolean {
     return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value);
 }
 
+export async function attestEducationProgramReadiness(formData: FormData): Promise<never> {
+    const sessionClient = await createClient();
+    const { data: { user } } = await sessionClient.auth.getUser();
+
+    if (!user) redirect("/login");
+
+    const { data: profile, error: profileError } = await sessionClient
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single();
+
+    if (profileError || profile?.role !== "admin") redirect("/dashboard");
+
+    const programId = String(formData.get("program_id") ?? "").trim();
+    const noticeVersion = String(formData.get("privacy_notice_version") ?? "").trim();
+    const privacyContactEmail = String(formData.get("privacy_contact_email") ?? "").trim().toLowerCase();
+    const retentionStatement = String(formData.get("retention_statement") ?? "").trim();
+    const safeguardingOwnerId = String(formData.get("safeguarding_owner_user_id") ?? "").trim();
+    const lmsCourseRef = String(formData.get("lms_course_ref") ?? "").trim();
+
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidPattern.test(programId) || !uuidPattern.test(safeguardingOwnerId)) {
+        redirect("/admin/education?error=Use%20valid%20programme%20and%20safeguarding-owner%20references.");
+    }
+    if (!/^[A-Za-z0-9._-]{3,80}$/.test(noticeVersion)) {
+        redirect("/admin/education?error=Privacy%20notice%20version%20must%20be%203%E2%80%9380%20letters%2C%20numbers%2C%20dots%2C%20underscores%20or%20hyphens.");
+    }
+    if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(privacyContactEmail) || privacyContactEmail.length > 254) {
+        redirect("/admin/education?error=Enter%20the%20Foundation-approved%20privacy%20contact%20email.");
+    }
+    if (retentionStatement.length < 20 || retentionStatement.length > 1500) {
+        redirect("/admin/education?error=Write%20a%20specific%20retention%20statement%20between%2020%20and%201500%20characters.");
+    }
+    if (!/^[A-Za-z0-9._:/#-]{3,200}$/.test(lmsCourseRef) || lmsCourseRef.includes("..")) {
+        redirect("/admin/education?error=Use%20a%20non-secret%20Moodle%20course%20ID%20or%20reference%20without%20tokens.");
+    }
+
+    if (formData.get("notice_reviewed") !== "yes"
+        || formData.get("retention_reviewed") !== "yes"
+        || formData.get("safeguarding_confirmed") !== "yes"
+        || formData.get("lms_verified") !== "yes"
+        || formData.get("launch_ready_confirmed") !== "yes") {
+        redirect("/admin/education?error=All%20readiness%20attestations%20must%20be%20explicitly%20confirmed.");
+    }
+
+    // The service role is used only to verify that the nominated owner is an
+    // existing account. The actual write uses the authenticated session so
+    // database audit events retain the acting administrator.
+    const admin = createAdminClient();
+    const { data: owner, error: ownerError } = await admin
+        .from("profiles")
+        .select("id")
+        .eq("id", safeguardingOwnerId)
+        .maybeSingle();
+
+    if (ownerError || !owner) {
+        redirect("/admin/education?error=Safeguarding%20owner%20must%20be%20an%20existing%20Foundation%20account.");
+    }
+
+    const now = new Date().toISOString();
+    const { data: updated, error: updateError } = await sessionClient
+        .from("education_programs")
+        .update({
+            privacy_notice_version: noticeVersion,
+            privacy_contact_email: privacyContactEmail,
+            retention_statement: retentionStatement,
+            privacy_notice_attested_by: user.id,
+            privacy_notice_attested_at: now,
+            safeguarding_owner_user_id: safeguardingOwnerId,
+            lms_course_ref: lmsCourseRef,
+            launch_ready_attested_by: user.id,
+            launch_ready_attested_at: now,
+        })
+        .eq("id", programId)
+        .select("id")
+        .maybeSingle();
+
+    if (updateError || !updated) {
+        redirect("/admin/education?error=Readiness%20could%20not%20be%20saved.%20Run%20the%20latest%20staging%20migration%20and%20verify%20admin%20permissions.");
+    }
+
+    revalidatePath("/admin/education");
+    revalidatePath("/education");
+    revalidatePath(`/education/privacy`);
+    redirect("/admin/education?readiness=1");
+}
+
 export async function setEducationProgramAvailability(formData: FormData): Promise<never> {
     const sessionClient = await createClient();
     const { data: { user } } = await sessionClient.auth.getUser();
@@ -140,7 +228,7 @@ export async function setEducationProgramAvailability(formData: FormData): Promi
 
     const { data: program, error: loadError } = await sessionClient
         .from("education_programs")
-        .select("id,status")
+        .select("id,status,privacy_notice_version,privacy_contact_email,retention_statement,privacy_notice_attested_by,privacy_notice_attested_at,safeguarding_owner_user_id,lms_course_ref,launch_ready_attested_by,launch_ready_attested_at")
         .eq("id", programId)
         .maybeSingle();
 
@@ -153,10 +241,39 @@ export async function setEducationProgramAvailability(formData: FormData): Promi
         redirect("/admin/education?error=Only%20published%20programmes%20can%20be%20paused.");
     }
 
-    const now = new Date().toISOString();
-    const nextValues = mode === "publish"
-        ? { status: "published", application_opens_at: now, application_closes_at: null }
-        : { status: "paused", application_closes_at: now };
+    if (mode === "publish" && (
+        !program.privacy_notice_version
+        || !program.privacy_contact_email
+        || !program.retention_statement
+        || !program.privacy_notice_attested_by
+        || !program.privacy_notice_attested_at
+        || !program.safeguarding_owner_user_id
+        || !program.lms_course_ref
+        || !program.launch_ready_attested_by
+        || !program.launch_ready_attested_at
+    )) {
+        redirect("/admin/education?error=Complete%20the%20notice%2C%20retention%2C%20safeguarding%2C%20LMS%20and%20launch%20attestation%20gates%20first.");
+    }
+
+    const now = new Date();
+    let nextValues: Record<string, string> = {};
+    if (mode === "publish") {
+        const closingDate = String(formData.get("application_closes_on") ?? "").trim();
+        if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(closingDate)) {
+            redirect("/admin/education?error=Set%20an%20application%20closing%20date.");
+        }
+        const closeAt = new Date(`${closingDate}T23:59:59+05:30`);
+        if (!Number.isFinite(closeAt.getTime()) || closeAt.getTime() <= now.getTime()) {
+            redirect("/admin/education?error=Application%20closing%20date%20must%20be%20in%20the%20future.");
+        }
+        nextValues = {
+            status: "published",
+            application_opens_at: now.toISOString(),
+            application_closes_at: closeAt.toISOString(),
+        };
+    } else {
+        nextValues = { status: "paused", application_closes_at: now.toISOString() };
+    }
 
     const { error: updateError } = await sessionClient
         .from("education_programs")
@@ -204,12 +321,21 @@ export async function submitEducationApplication(formData: FormData): Promise<ne
 
     const { data: program, error: programError } = await sessionClient
         .from("education_programs")
-        .select("id,status,application_opens_at,application_closes_at")
+        .select("id,status,application_opens_at,application_closes_at,privacy_notice_version,privacy_contact_email,retention_statement,privacy_notice_attested_at,safeguarding_owner_user_id,lms_course_ref,launch_ready_attested_at")
         .eq("slug", slug)
         .eq("status", "published")
         .maybeSingle();
 
-    if (programError || !program) redirect(`${applicationPath}?error=not-open`);
+    if (programError || !program
+        || !program.privacy_notice_version
+        || !program.privacy_contact_email
+        || !program.retention_statement
+        || !program.privacy_notice_attested_at
+        || !program.safeguarding_owner_user_id
+        || !program.lms_course_ref
+        || !program.launch_ready_attested_at) {
+        redirect(`${applicationPath}?error=not-open`);
+    }
 
     const nowMs = Date.now();
     const opensMs = program.application_opens_at ? Date.parse(program.application_opens_at) : null;
@@ -239,7 +365,7 @@ export async function submitEducationApplication(formData: FormData): Promise<ne
             applicant_full_name: fullName,
             applicant_email: contactEmail,
             college_name: institutionName || null,
-            consent_version: applicationConsentVersion,
+            consent_version: program.privacy_notice_version,
             consent_at: new Date().toISOString(),
             status: "submitted",
             submitted_at: new Date().toISOString(),
@@ -255,6 +381,7 @@ export async function submitEducationApplication(formData: FormData): Promise<ne
     }
 
     revalidatePath("/education");
+    revalidatePath(`/education/privacy`);
     revalidatePath(applicationPath);
     revalidatePath("/admin/education");
     revalidatePath("/admin/education/applications");
