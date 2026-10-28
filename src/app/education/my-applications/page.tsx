@@ -293,7 +293,7 @@ export default async function MyEducationApplicationsPage() {
           </>
         )}
 
-        <p style={{ color: "var(--text-muted)", fontSize: 11, lineHeight: 1.7, marginTop: 26 }}>Applications, enrolments and attendance are read from the authenticated account. Internal reviewer notes, other learners' records and safeguarding case notes are never displayed on this page.</p>
+        <p style={{ color: "var(--text-muted)", fontSize: 11, lineHeight: 1.7, marginTop: 26 }}>Applications, enrolments and attendance are read from the authenticated account. Internal reviewer notes, records belonging to other learners and safeguarding case notes are never displayed on this page.</p>
       </div>
     </main>
   );
