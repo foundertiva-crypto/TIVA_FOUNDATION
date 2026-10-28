@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { CSSProperties } from "react";
 import { AlertTriangle, ArrowLeft, CalendarCheck, ClipboardCheck, Clock3, ShieldCheck } from "lucide-react";
 import { recordEducationAttendance } from "@/app/actions/education";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -60,7 +61,7 @@ function formatDateTime(value: string) {
 }
 function humanize(value: string) { return value.replaceAll("_", " "); }
 
-const inputStyle: React.CSSProperties = {
+const inputStyle: CSSProperties = {
   width: "100%", minHeight: 40, border: "1px solid var(--border-accent)",
   borderRadius: 8, padding: "8px 10px", background: "var(--bg-secondary)",
   color: "var(--text-primary)", outline: "none", fontSize: 12,
@@ -164,7 +165,6 @@ export default async function EducationAttendanceAdminPage({ searchParams }: Pro
                       const record = attendance.get(key);
                       const currentStatus = record?.attendance_status && statusOptions.some((option) => option.value === record.attendance_status)
                         ? record.attendance_status : "present";
-                      const future = Date.parse(session.starts_at) > Date.now();
                       return (
                         <form key={enrollment.id} action={recordEducationAttendance} style={{ display: "grid", gridTemplateColumns: "minmax(140px, 1.2fr) minmax(140px, .8fr) minmax(160px, 1fr) auto", gap: 9, alignItems: "end", borderTop: "1px solid var(--border-subtle)", paddingTop: 11 }}>
                           <input type="hidden" name="session_id" value={session.id}/>
@@ -175,14 +175,14 @@ export default async function EducationAttendanceAdminPage({ searchParams }: Pro
                             {record && <p style={{ color: "var(--text-muted)", fontSize: 10, marginTop: 3 }}>Last recorded {formatDateTime(record.recorded_at)}</p>}
                           </div>
                           <label style={{ display: "grid", gap: 5, color: "var(--text-secondary)", fontSize: 11 }}>Attendance status
-                            <select name="attendance_status" defaultValue={currentStatus} style={inputStyle} disabled={future}>
+                            <select name="attendance_status" defaultValue={currentStatus} style={inputStyle}>
                               {statusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                             </select>
                           </label>
                           <label style={{ display: "grid", gap: 5, color: "var(--text-secondary)", fontSize: 11 }}>Correction reason (required when changing a saved status)
-                            <input name="correction_reason" maxLength={500} placeholder="Reason for correction, if any" style={inputStyle} disabled={future}/>
+                            <input name="correction_reason" maxLength={500} placeholder="Reason for correction, if any" style={inputStyle}/>
                           </label>
-                          <button type="submit" className="btn-primary" disabled={future} style={{ border: 0, borderRadius: 8, padding: "10px 12px", fontWeight: 800, fontSize: 11, cursor: future ? "not-allowed" : "pointer", opacity: future ? .5 : 1 }}>Save</button>
+                          <button type="submit" className="btn-primary" style={{ border: 0, borderRadius: 8, padding: "10px 12px", fontWeight: 800, fontSize: 11, cursor: "pointer" }}>Save</button>
                           {record?.last_corrected_at && <p style={{ gridColumn: "1 / -1", color: "var(--text-muted)", fontSize: 10 }}>Corrected {formatDateTime(record.last_corrected_at)} by {record.last_corrected_by?.slice(0,8) ?? "staff"} · {record.correction_reason}</p>}
                         </form>
                       );
