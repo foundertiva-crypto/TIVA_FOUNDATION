@@ -433,3 +433,218 @@ export async function reviewEducationApplication(formData: FormData): Promise<ne
     revalidatePath("/admin/education");
     redirect("/admin/education/applications?updated=1");
 }
+
+
+export async function createEducationCohort(formData: FormData): Promise<never> {
+    const sessionClient = await createClient();
+    const { data: { user } } = await sessionClient.auth.getUser();
+    if (!user) redirect("/login");
+
+    const { data: profile, error: profileError } = await sessionClient
+        .from("profiles").select("role").eq("id", user.id).single();
+    if (profileError || profile?.role !== "admin") redirect("/dashboard");
+
+    const programId = String(formData.get("program_id") ?? "").trim();
+    const slug = String(formData.get("slug") ?? "").trim().toLowerCase();
+    const title = String(formData.get("title") ?? "").trim();
+    const startDate = String(formData.get("start_date") ?? "").trim();
+    const endDate = String(formData.get("end_date") ?? "").trim();
+    const capacity = Number(String(formData.get("capacity") ?? "50").trim());
+    const deliveryMode = String(formData.get("delivery_mode") ?? "hybrid");
+
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(programId)) {
+        redirect("/admin/education/cohorts?error=invalid-program");
+    }
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) redirect("/admin/education/cohorts?error=invalid-slug");
+    if (title.length < 3 || title.length > 160) redirect("/admin/education/cohorts?error=invalid-title");
+    if (!Number.isInteger(capacity) || capacity < 1 || capacity > 100000) redirect("/admin/education/cohorts?error=invalid-capacity");
+    if (!allowedDeliveryModes.has(deliveryMode)) redirect("/admin/education/cohorts?error=invalid-mode");
+
+    const datePattern = /^\\d{4}-\\d{2}-\\d{2}$/;
+    if ((startDate && !datePattern.test(startDate)) || (endDate && !datePattern.test(endDate))) {
+        redirect("/admin/education/cohorts?error=invalid-date");
+    }
+    if (startDate && Number.isNaN(Date.parse(startDate + "T00:00:00Z"))) redirect("/admin/education/cohorts?error=invalid-date");
+    if (endDate && Number.isNaN(Date.parse(endDate + "T00:00:00Z"))) redirect("/admin/education/cohorts?error=invalid-date");
+    if (startDate && endDate && endDate < startDate) redirect("/admin/education/cohorts?error=date-order");
+
+    const { data: program, error: programError } = await sessionClient
+        .from("education_programs")
+        .select("id,capacity")
+        .eq("id", programId)
+        .maybeSingle();
+    if (programError || !program) redirect("/admin/education/cohorts?error=program-unavailable");
+    if (capacity > program.capacity) redirect("/admin/education/cohorts?error=capacity-exceeds-program");
+
+    const { error: insertError } = await sessionClient.from("education_cohorts").insert({
+        program_id: programId,
+        slug,
+        title,
+        start_date: startDate || null,
+        end_date: endDate || null,
+        timezone: "Asia/Kolkata",
+        delivery_mode: deliveryMode,
+        capacity,
+        status: "draft",
+        created_by: user.id,
+    });
+
+    if (insertError) {
+        if (insertError.code === "23505") redirect("/admin/education/cohorts?error=duplicate-slug");
+        if (insertError.code === "42P01" || insertError.code === "PGRST205") redirect("/admin/education/cohorts?error=migration-required");
+        redirect("/admin/education/cohorts?error=create-failed");
+    }
+
+    revalidatePath("/admin/education");
+    revalidatePath("/admin/education/cohorts");
+    redirect("/admin/education/cohorts?created=1");
+}
+
+export async function createEducationSession(formData: FormData): Promise<never> {
+    const sessionClient = await createClient();
+    const { data: { user } } = await sessionClient.auth.getUser();
+    if (!user) redirect("/login");
+
+    const { data: profile, error: profileError } = await sessionClient
+        .from("profiles").select("role").eq("id", user.id).single();
+    if (profileError || profile?.role !== "admin") redirect("/dashboard");
+
+    const cohortId = String(formData.get("cohort_id") ?? "").trim();
+    const title = String(formData.get("title") ?? "").trim();
+    const description = String(formData.get("description") ?? "").trim();
+    const startsLocal = String(formData.get("starts_at") ?? "").trim();
+    const endsLocal = String(formData.get("ends_at") ?? "").trim();
+    const deliveryMode = String(formData.get("delivery_mode") ?? "hybrid");
+    const locationLabel = String(formData.get("location_label") ?? "").trim();
+
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(cohortId)) redirect("/admin/education/cohorts?error=invalid-cohort");
+    if (title.length < 3 || title.length > 180) redirect("/admin/education/cohorts?error=session-title");
+    if (description.length > 2000 || locationLabel.length > 180) redirect("/admin/education/cohorts?error=session-details");
+    if (!allowedDeliveryModes.has(deliveryMode)) redirect("/admin/education/cohorts?error=invalid-mode");
+    const localDateTimePattern = /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$/;
+    if (!localDateTimePattern.test(startsLocal) || !localDateTimePattern.test(endsLocal)) redirect("/admin/education/cohorts?error=session-dates");
+
+    // datetime-local input is interpreted explicitly as India Standard Time, not server-local time.
+    const startsAt = new Date(`${startsLocal}:00+05:30`);
+    const endsAt = new Date(`${endsLocal}:00+05:30`);
+    if (!Number.isFinite(startsAt.getTime()) || !Number.isFinite(endsAt.getTime())
+        || startsAt.getTime() <= Date.now() || endsAt.getTime() <= startsAt.getTime()) {
+        redirect("/admin/education/cohorts?error=session-time-order");
+    }
+
+    const { data: cohort, error: cohortError } = await sessionClient
+        .from("education_cohorts")
+        .select("id,status")
+        .eq("id", cohortId)
+        .maybeSingle();
+    if (cohortError || !cohort) redirect("/admin/education/cohorts?error=cohort-unavailable");
+    if (cohort.status === "cancelled" || cohort.status === "completed") redirect("/admin/education/cohorts?error=cohort-closed");
+
+    const { error: insertError } = await sessionClient.from("education_sessions").insert({
+        cohort_id: cohortId,
+        title,
+        description,
+        starts_at: startsAt.toISOString(),
+        ends_at: endsAt.toISOString(),
+        delivery_mode: deliveryMode,
+        location_label: locationLabel || null,
+        published: false,
+        created_by: user.id,
+    });
+    if (insertError) {
+        if (insertError.code === "42P01" || insertError.code === "PGRST205") redirect("/admin/education/cohorts?error=migration-required");
+        redirect("/admin/education/cohorts?error=session-create-failed");
+    }
+
+    revalidatePath("/admin/education/cohorts");
+    revalidatePath("/education/my-applications");
+    redirect("/admin/education/cohorts?session-created=1");
+}
+
+export async function setEducationCohortStatus(formData: FormData): Promise<never> {
+    const sessionClient = await createClient();
+    const { data: { user } } = await sessionClient.auth.getUser();
+    if (!user) redirect("/login");
+
+    const { data: profile, error: profileError } = await sessionClient
+        .from("profiles").select("role").eq("id", user.id).single();
+    if (profileError || profile?.role !== "admin") redirect("/dashboard");
+
+    const cohortId = String(formData.get("cohort_id") ?? "").trim();
+    const targetStatus = String(formData.get("status") ?? "");
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(cohortId)) redirect("/admin/education/cohorts?error=invalid-cohort");
+    if (!["active", "completed", "cancelled"].includes(targetStatus)) redirect("/admin/education/cohorts?error=invalid-cohort-status");
+
+    const { data: cohort, error: loadError } = await sessionClient
+        .from("education_cohorts").select("id,program_id,status").eq("id", cohortId).maybeSingle();
+    if (loadError || !cohort) redirect("/admin/education/cohorts?error=cohort-unavailable");
+
+    if (targetStatus === "active" && cohort.status !== "draft") redirect("/admin/education/cohorts?error=invalid-cohort-transition");
+    if (targetStatus === "completed" && cohort.status !== "active") redirect("/admin/education/cohorts?error=invalid-cohort-transition");
+    if (targetStatus === "cancelled" && !["draft", "active"].includes(cohort.status)) redirect("/admin/education/cohorts?error=invalid-cohort-transition");
+
+    if (targetStatus === "active") {
+        const [{ data: program }, { count: sessionsCount, error: sessionsError }] = await Promise.all([
+            sessionClient.from("education_programs").select("status").eq("id", cohort.program_id).maybeSingle(),
+            sessionClient.from("education_sessions").select("id", { count: "exact", head: true }).eq("cohort_id", cohortId),
+        ]);
+        if (!program || program.status !== "published") redirect("/admin/education/cohorts?error=program-not-published");
+        if (sessionsError || !sessionsCount || sessionsCount < 1) redirect("/admin/education/cohorts?error=session-required");
+    }
+
+    const { error: updateError } = await sessionClient
+        .from("education_cohorts").update({ status: targetStatus }).eq("id", cohortId);
+    if (updateError) redirect("/admin/education/cohorts?error=cohort-update-failed");
+
+    revalidatePath("/admin/education/cohorts");
+    revalidatePath("/admin/education");
+    redirect("/admin/education/cohorts?cohort-updated=1");
+}
+
+export async function setEducationSessionPublished(formData: FormData): Promise<never> {
+    const sessionClient = await createClient();
+    const { data: { user } } = await sessionClient.auth.getUser();
+    if (!user) redirect("/login");
+
+    const { data: profile, error: profileError } = await sessionClient
+        .from("profiles").select("role").eq("id", user.id).single();
+    if (profileError || profile?.role !== "admin") redirect("/dashboard");
+
+    const sessionId = String(formData.get("session_id") ?? "").trim();
+    const publish = formData.get("published") === "yes";
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(sessionId)) redirect("/admin/education/cohorts?error=invalid-session");
+
+    const { data: session, error: sessionError } = await sessionClient
+        .from("education_sessions")
+        .select("id,cohort_id,starts_at,ends_at,published")
+        .eq("id", sessionId)
+        .maybeSingle();
+    if (sessionError || !session) redirect("/admin/education/cohorts?error=session-unavailable");
+    if (publish && session.published) redirect("/admin/education/cohorts?error=session-already-published");
+    if (publish && Date.parse(session.starts_at) <= Date.now()) redirect("/admin/education/cohorts?error=session-already-started");
+
+    if (publish) {
+        const { data: cohort } = await sessionClient
+            .from("education_cohorts")
+            .select("id,status,program_id")
+            .eq("id", session.cohort_id)
+            .maybeSingle();
+        if (!cohort || cohort.status !== "active") redirect("/admin/education/cohorts?error=activate-cohort-first");
+        const { data: program } = await sessionClient
+            .from("education_programs")
+            .select("id,status")
+            .eq("id", cohort.program_id)
+            .maybeSingle();
+        if (!program || program.status !== "published") redirect("/admin/education/cohorts?error=program-not-published");
+    }
+
+    const { error: updateError } = await sessionClient
+        .from("education_sessions")
+        .update({ published: publish })
+        .eq("id", sessionId);
+    if (updateError) redirect("/admin/education/cohorts?error=session-publish-failed");
+
+    revalidatePath("/admin/education/cohorts");
+    revalidatePath("/education/my-applications");
+    redirect("/admin/education/cohorts?session-updated=1");
+}
