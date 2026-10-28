@@ -13,7 +13,7 @@ export async function createEducationProgram(formData: FormData): Promise<never>
 
     if (!user) redirect("/login");
 
-    // Server-side role check is required even though the page sits beneath AdminLayout.
+    // Recheck on the server; a protected layout is not the only security boundary.
     const { data: profile, error: profileError } = await sessionClient
         .from("profiles")
         .select("role")
@@ -57,6 +57,8 @@ export async function createEducationProgram(formData: FormData): Promise<never>
         redirect("/admin/education?error=Description%20must%20be%202000%20characters%20or%20less.");
     }
 
+    let failure: "duplicate" | "migration" | "database" | null = null;
+
     try {
         const admin = createAdminClient();
         const { error } = await admin.from("education_programs").insert({
@@ -71,16 +73,25 @@ export async function createEducationProgram(formData: FormData): Promise<never>
         });
 
         if (error) {
-            if (error.code === "23505") {
-                redirect("/admin/education?error=That%20programme%20slug%20already%20exists.");
-            }
-            if (error.code === "42P01" || error.code === "PGRST205") {
-                redirect("/admin/education?error=Education%20migration%20is%20not%20installed%20in%20this%20database.");
-            }
-            redirect("/admin/education?error=Programme%20could%20not%20be%20created.%20Check%20database%20configuration%20and%20logs.");
+            if (error.code === "23505") failure = "duplicate";
+            else if (error.code === "42P01" || error.code === "PGRST205") failure = "migration";
+            else failure = "database";
         }
     } catch {
-        redirect("/admin/education?error=Education%20database%20connection%20failed.%20Check%20server%20environment%20configuration.");
+        failure = "database";
+    }
+
+    // Do redirects outside the try/catch: Next.js redirects throw a control-flow
+    // exception, and catching one would incorrectly turn an application error
+    // into a generic database-connection error.
+    if (failure === "duplicate") {
+        redirect("/admin/education?error=That%20programme%20slug%20already%20exists.");
+    }
+    if (failure === "migration") {
+        redirect("/admin/education?error=Education%20migration%20is%20not%20installed%20in%20this%20database.");
+    }
+    if (failure === "database") {
+        redirect("/admin/education?error=Programme%20could%20not%20be%20created.%20Check%20the%20database%20configuration.");
     }
 
     revalidatePath("/admin/education");
