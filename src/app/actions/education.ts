@@ -61,8 +61,7 @@ export async function createEducationProgram(formData: FormData): Promise<never>
     let failure: "duplicate" | "migration" | "database" | null = null;
 
     try {
-        const admin = createAdminClient();
-        const { error } = await admin.from("education_programs").insert({
+        const { error } = await sessionClient.from("education_programs").insert({
             title,
             slug,
             summary,
