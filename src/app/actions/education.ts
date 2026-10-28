@@ -648,3 +648,96 @@ export async function setEducationSessionPublished(formData: FormData): Promise<
     revalidatePath("/education/my-applications");
     redirect("/admin/education/cohorts?session-updated=1");
 }
+
+
+export async function recordEducationAttendance(formData: FormData): Promise<never> {
+    const sessionClient = await createClient();
+    const { data: { user } } = await sessionClient.auth.getUser();
+    if (!user) redirect("/login");
+
+    const { data: profile, error: profileError } = await sessionClient
+        .from("profiles").select("role").eq("id", user.id).single();
+    if (profileError || profile?.role !== "admin") redirect("/dashboard");
+
+    const sessionId = String(formData.get("session_id") ?? "").trim();
+    const enrollmentId = String(formData.get("enrollment_id") ?? "").trim();
+    const status = String(formData.get("attendance_status") ?? "");
+    const correctionReason = String(formData.get("correction_reason") ?? "").trim();
+
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidPattern.test(sessionId) || !uuidPattern.test(enrollmentId)) redirect("/admin/education/attendance?error=invalid-reference");
+    if (!["present","late","absent","excused"].includes(status)) redirect("/admin/education/attendance?error=invalid-status");
+    if (correctionReason.length > 500) redirect("/admin/education/attendance?error=reason-too-long");
+
+    const { data: session, error: sessionError } = await sessionClient
+        .from("education_sessions")
+        .select("id,cohort_id,starts_at,published")
+        .eq("id", sessionId)
+        .maybeSingle();
+    if (sessionError || !session) redirect("/admin/education/attendance?error=session-unavailable");
+    if (!session.published) redirect("/admin/education/attendance?error=session-not-published");
+    if (Date.parse(session.starts_at) > Date.now()) redirect("/admin/education/attendance?error=session-not-started");
+
+    const { data: enrollment, error: enrollmentError } = await sessionClient
+        .from("education_enrollments")
+        .select("id,cohort_id,learner_user_id,status")
+        .eq("id", enrollmentId)
+        .maybeSingle();
+    if (enrollmentError || !enrollment) redirect("/admin/education/attendance?error=enrollment-unavailable");
+    if (enrollment.cohort_id !== session.cohort_id
+        || !["enrolled","active","completed","incomplete"].includes(enrollment.status)) {
+        redirect("/admin/education/attendance?error=enrollment-mismatch");
+    }
+
+    const { data: existing, error: existingError } = await sessionClient
+        .from("education_attendance")
+        .select("id,attendance_status,recorded_by,recorded_at,last_corrected_by,last_corrected_at")
+        .eq("session_id", sessionId)
+        .eq("enrollment_id", enrollmentId)
+        .maybeSingle();
+    if (existingError) redirect("/admin/education/attendance?error=database");
+
+    const now = new Date().toISOString();
+    if (existing) {
+        if (existing.attendance_status === status) redirect("/admin/education/attendance?saved=1");
+        if (correctionReason.length < 5) redirect("/admin/education/attendance?error=correction-reason-required");
+
+        const { error: updateError } = await sessionClient
+            .from("education_attendance")
+            .update({
+                attendance_status: status,
+                correction_reason: correctionReason,
+                last_corrected_by: user.id,
+                last_corrected_at: now,
+            })
+            .eq("id", existing.id);
+
+        if (updateError) {
+            if (updateError.code === "42501") redirect("/admin/education/attendance?error=not-authorized");
+            redirect("/admin/education/attendance?error=correction-failed");
+        }
+    } else {
+        const { error: insertError } = await sessionClient
+            .from("education_attendance")
+            .insert({
+                session_id: sessionId,
+                cohort_id: session.cohort_id,
+                enrollment_id: enrollment.id,
+                learner_user_id: enrollment.learner_user_id,
+                attendance_status: status,
+                correction_reason: null,
+                recorded_by: user.id,
+                recorded_at: now,
+            });
+
+        if (insertError) {
+            if (insertError.code === "42501") redirect("/admin/education/attendance?error=not-authorized");
+            if (insertError.code === "23505") redirect("/admin/education/attendance?saved=1");
+            redirect("/admin/education/attendance?error=record-failed");
+        }
+    }
+
+    revalidatePath("/admin/education/attendance");
+    revalidatePath("/education/my-applications");
+    redirect("/admin/education/attendance?saved=1");
+}
