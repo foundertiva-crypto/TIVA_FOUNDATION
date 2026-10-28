@@ -202,9 +202,13 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM public.education_programs WHERE id = '20000000-0000-4000-8000-000000000001') THEN
     RAISE EXCEPTION 'Functional regression: published programme is not public';
   END IF;
-  IF EXISTS (SELECT 1 FROM public.education_applications) THEN
-    RAISE EXCEPTION 'SECURITY FAILURE: anonymous user can read applications';
-  END IF;
+  -- No SELECT privilege is an acceptable and stronger denial for anonymous access.
+  BEGIN
+    PERFORM 1 FROM public.education_applications;
+    RAISE EXCEPTION 'SECURITY FAILURE: anonymous user can query applications';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;
+  END;
 END
 $test$;
 
