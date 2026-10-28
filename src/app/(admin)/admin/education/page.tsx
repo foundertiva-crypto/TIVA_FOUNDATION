@@ -5,7 +5,7 @@ import {
   Award, ShieldCheck, BarChart3, FileCheck2, Workflow, ExternalLink,
   CircleDot, CheckCircle2, AlertTriangle
 } from "lucide-react";
-import { createEducationProgram } from "@/app/actions/education";
+import { createEducationProgram, attestEducationProgramReadiness, setEducationProgramAvailability } from "@/app/actions/education";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type EducationProgram = {
@@ -18,6 +18,13 @@ type EducationProgram = {
   delivery_mode: string;
   languages: string[];
   created_at: string;
+  privacy_notice_version: string | null;
+  privacy_contact_email: string | null;
+  retention_statement: string | null;
+  privacy_notice_attested_at: string | null;
+  safeguarding_owner_user_id: string | null;
+  lms_course_ref: string | null;
+  launch_ready_attested_at: string | null;
 };
 
 type EducationSnapshot = {
@@ -37,7 +44,7 @@ async function getEducationSnapshot(): Promise<EducationSnapshot> {
     const admin = createAdminClient();
     const [programs, applications, cohorts, enrollments] = await Promise.all([
       admin.from("education_programs")
-        .select("id,title,slug,summary,status,capacity,delivery_mode,languages,created_at", { count: "exact" })
+        .select("id,title,slug,summary,status,capacity,delivery_mode,languages,created_at,privacy_notice_version,privacy_contact_email,retention_statement,privacy_notice_attested_at,safeguarding_owner_user_id,lms_course_ref,launch_ready_attested_at", { count: "exact" })
         .order("created_at", { ascending: false })
         .limit(100),
       admin.from("education_applications").select("id", { count: "exact", head: true }),
@@ -114,9 +121,9 @@ function Pill({ state }: { state: string }) {
 export default async function EducationAdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ created?: string; error?: string }>;
+  searchParams: Promise<{ created?: string; error?: string; readiness?: string; published?: string; paused?: string }>;
 }) {
-  const [{ created, error }, snapshot] = await Promise.all([searchParams, getEducationSnapshot()]);
+  const [{ created, error, readiness, published, paused }, snapshot] = await Promise.all([searchParams, getEducationSnapshot()]);
   const metrics = [
     { label: "Programmes", value: snapshot.ready ? snapshot.counts.programs : "—", sub: "Database records", icon: ClipboardList },
     { label: "Applications", value: snapshot.ready ? snapshot.counts.applications : "—", sub: "All statuses", icon: UsersRound },
@@ -140,7 +147,10 @@ export default async function EducationAdminPage({
         </span>
       </div>
 
-      {created && <div role="status" style={{ padding: 14, marginBottom: 16, borderRadius: 10, border: "1px solid rgba(0,230,118,.35)", background: "rgba(0,230,118,.08)" }}>Draft programme created. Dates, eligibility, learner notice and course details must be approved before publication.</div>}
+      {created && <div role="status" style={{ padding: 14, marginBottom: 16, borderRadius: 10, border: "1px solid rgba(0,230,118,.35)", background: "rgba(0,230,118,.08)" }}>Draft programme created. Complete and attest readiness before publication.</div>}
+      {readiness && <div role="status" style={{ padding: 14, marginBottom: 16, borderRadius: 10, border: "1px solid rgba(0,230,118,.35)", background: "rgba(0,230,118,.08)" }}>Readiness attestation recorded. Check the details and review the close date before publishing.</div>}
+      {published && <div role="status" style={{ padding: 14, marginBottom: 16, borderRadius: 10, border: "1px solid rgba(0,230,118,.35)", background: "rgba(0,230,118,.08)" }}>Programme published. Its application window is now open and has a recorded closing date.</div>}
+      {paused && <div role="status" style={{ padding: 14, marginBottom: 16, borderRadius: 10, border: "1px solid var(--border-subtle)", background: "var(--bg-secondary)" }}>Applications paused. The programme remains in the register but is no longer accepting new applications.</div>}
       {error && <div role="alert" style={{ padding: 14, marginBottom: 16, borderRadius: 10, border: "1px solid rgba(255,107,107,.4)", background: "rgba(255,107,107,.08)" }}>{error}</div>}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 190px), 1fr))", gap: 12, marginBottom: 24 }}>
@@ -198,20 +208,98 @@ export default async function EducationAdminPage({
           <h2 style={{ fontSize: 19, fontWeight: 800, marginBottom: 6 }}>Programme register</h2>
           <p style={{ color: "var(--text-secondary)", fontSize: 13, marginBottom: 16 }}>Actual database records, when the migration is installed and reachable.</p>
           {snapshot.ready && snapshot.programs.length > 0 ? <div style={{ display: "grid", gap: 10 }}>
-            {snapshot.programs.map((program) => <article key={program.id} style={{ border: "1px solid var(--border-subtle)", borderRadius: 12, padding: 14 }}>
-              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-                <div><h3 style={{ fontWeight: 800, fontSize: 15 }}>{program.title}</h3><p style={{ color: "var(--text-muted)", fontSize: 12, marginTop: 4 }}>/{program.slug}</p></div>
-                <Pill state={program.status} />
-              </div>
-              {program.summary && <p style={{ color: "var(--text-secondary)", fontSize: 12, marginTop: 10, lineHeight: 1.6 }}>{program.summary}</p>}
-              <p style={{ color: "var(--text-secondary)", fontSize: 12, marginTop: 10 }}>Capacity {program.capacity} · {program.delivery_mode.replace("_", " ")} · {(program.languages ?? []).join(", ").toUpperCase()}</p>
-              <p style={{ color: "var(--text-muted)", fontSize: 11, marginTop: 6 }}>Created {formatDate(program.created_at)}</p>
-            </article>)}
+            {snapshot.programs.map((program) => {
+              const readinessComplete = Boolean(
+                program.privacy_notice_version
+                && program.privacy_contact_email
+                && program.retention_statement
+                && program.privacy_notice_attested_at
+                && program.safeguarding_owner_user_id
+                && program.lms_course_ref
+                && program.launch_ready_attested_at
+              );
+              return <article key={program.id} style={{ border: "1px solid var(--border-subtle)", borderRadius: 12, padding: 14, display: "grid", gap: 14 }}>
+                <div>
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                    <div><h3 style={{ fontWeight: 800, fontSize: 15 }}>{program.title}</h3><p style={{ color: "var(--text-muted)", fontSize: 12, marginTop: 4 }}>/{program.slug}</p></div>
+                    <Pill state={program.status} />
+                  </div>
+                  {program.summary && <p style={{ color: "var(--text-secondary)", fontSize: 12, marginTop: 10, lineHeight: 1.6 }}>{program.summary}</p>}
+                  <p style={{ color: "var(--text-secondary)", fontSize: 12, marginTop: 10 }}>Capacity {program.capacity} · {program.delivery_mode.replace("_", " ")} · {(program.languages ?? []).join(", ").toUpperCase()}</p>
+                  <p style={{ color: "var(--text-muted)", fontSize: 11, marginTop: 6 }}>Created {formatDate(program.created_at)}</p>
+                  <p style={{ color: readinessComplete ? "#00C987" : "#D4A72C", fontWeight: 750, fontSize: 11, marginTop: 8 }}>{readinessComplete ? "READINESS ATTESTED" : "READINESS INCOMPLETE"}</p>
+                </div>
+
+                {program.status !== "published" && <details style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: 12 }}>
+                  <summary style={{ cursor: "pointer", fontSize: 13, fontWeight: 800 }}>Configure privacy, safeguarding and LMS readiness</summary>
+                  <form action={attestEducationProgramReadiness} style={{ display: "grid", gap: 10, marginTop: 13 }}>
+                    <input type="hidden" name="program_id" value={program.id} />
+                    <label style={{ display: "grid", gap: 5, color: "var(--text-secondary)", fontSize: 12 }}>Reviewed privacy notice version
+                      <input name="privacy_notice_version" required minLength={3} maxLength={80} pattern="[A-Za-z0-9._-]{3,80}" defaultValue={program.privacy_notice_version ?? ""} placeholder="education-privacy-v1" style={inputStyle} />
+                    </label>
+                    <label style={{ display: "grid", gap: 5, color: "var(--text-secondary)", fontSize: 12 }}>Public privacy contact email
+                      <input name="privacy_contact_email" type="email" required maxLength={254} defaultValue={program.privacy_contact_email ?? ""} placeholder="privacy@your-approved-domain" style={inputStyle} />
+                    </label>
+                    <label style={{ display: "grid", gap: 5, color: "var(--text-secondary)", fontSize: 12 }}>Retention statement shown to applicants
+                      <textarea name="retention_statement" required minLength={20} maxLength={1500} defaultValue={program.retention_statement ?? ""} rows={3} placeholder="Specify the approved retention period and how deletion requests are handled." style={{ ...inputStyle, resize: "vertical" }} />
+                    </label>
+                    <label style={{ display: "grid", gap: 5, color: "var(--text-secondary)", fontSize: 12 }}>Safeguarding owner account UUID
+                      <input name="safeguarding_owner_user_id" required defaultValue={program.safeguarding_owner_user_id ?? ""} placeholder="UUID of the assigned Foundation contact" style={inputStyle} />
+                    </label>
+                    <label style={{ display: "grid", gap: 5, color: "var(--text-secondary)", fontSize: 12 }}>Moodle course ID or non-secret reference
+                      <input name="lms_course_ref" required maxLength={200} defaultValue={program.lms_course_ref ?? ""} placeholder="Moodle course ID; never enter access tokens" style={inputStyle} />
+                    </label>
+                    <div style={{ display: "grid", gap: 8, border: "1px solid var(--border-subtle)", borderRadius: 10, padding: 11 }}>
+                      {[
+                        ["notice_reviewed", "I reviewed the actual privacy notice text and contact details."],
+                        ["retention_reviewed", "I verified the retention statement against the Foundation's approved schedule."],
+                        ["safeguarding_confirmed", "The safeguarding contact is appointed and the escalation path is ready."],
+                        ["lms_verified", "The referenced LMS course exists and its access settings were tested."],
+                        ["launch_ready_confirmed", "The staging checks, privacy and programme launch gates have been reviewed."],
+                      ].map(([name, label]) => <label key={name} style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 11, lineHeight: 1.6, color: "var(--text-secondary)" }}>
+                        <input type="checkbox" name={name} value="yes" required style={{ marginTop: 3 }} /> <span>{label}</span>
+                      </label>)}
+                    </div>
+                    <button type="submit" className="btn-primary" style={{ border: 0, borderRadius: 9, padding: "11px 13px", fontWeight: 800, cursor: "pointer" }}>Record readiness attestation</button>
+                  </form>
+                </details>}
+
+                {program.status === "draft" || program.status === "paused" ? (
+                  <form action={setEducationProgramAvailability} style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: 12, display: "grid", gap: 9 }}>
+                    <input type="hidden" name="program_id" value={program.id} />
+                    <input type="hidden" name="mode" value="publish" />
+                    <label style={{ display: "grid", gap: 5, color: "var(--text-secondary)", fontSize: 12 }}>Application closing date (India time)
+                      <input type="date" name="application_closes_on" required min={new Date().toISOString().slice(0,10)} style={inputStyle} />
+                    </label>
+                    <label style={{ display: "flex", gap: 8, alignItems: "flex-start", color: "var(--text-secondary)", fontSize: 11, lineHeight: 1.6 }}>
+                      <input type="checkbox" name="publish_confirmed" value="yes" required style={{ marginTop: 3 }} />
+                      <span>I confirm the programme is approved, the notice and retention details are accurate, and the course and safeguarding gates are complete.</span>
+                    </label>
+                    <button type="submit" className="btn-primary" style={{ border: 0, borderRadius: 9, padding: "11px 13px", fontWeight: 800, cursor: "pointer" }}>Publish and open applications</button>
+                  </form>
+                ) : program.status === "published" ? (
+                  <form action={setEducationProgramAvailability} style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: 12, display: "grid", gap: 9 }}>
+                    <input type="hidden" name="program_id" value={program.id} />
+                    <input type="hidden" name="mode" value="pause" />
+                    <label style={{ display: "flex", gap: 8, alignItems: "flex-start", color: "var(--text-secondary)", fontSize: 11, lineHeight: 1.6 }}>
+                      <input type="checkbox" name="publish_confirmed" value="yes" required style={{ marginTop: 3 }} />
+                      <span>Confirm that applications should stop immediately.</span>
+                    </label>
+                    <button type="submit" style={{ border: "1px solid rgba(212,167,44,.4)", borderRadius: 9, background: "transparent", color: "#D4A72C", padding: "11px 13px", fontWeight: 800, cursor: "pointer" }}>Pause applications</button>
+                  </form>
+                ) : null}
+                {program.status === "published" && <Link href={`/education/apply/${program.slug}`} target="_blank" rel="noreferrer" style={{ color: "var(--brand-secondary)", fontSize: 12, fontWeight: 700 }}>Preview application page ↗</Link>}
+              </article>;
+            })}
           </div> : <div style={{ padding: 20, borderRadius: 12, background: "var(--bg-secondary)", color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.7 }}>
             {snapshot.ready ? "No programmes have been created yet. Create the first draft programme." : "Live programme data will appear after the migration and database connection are verified."}
           </div>}
         </section>
       </div>
+
+      <section style={{ marginTop: 8, marginBottom: 10 }}>
+        <Link href="/admin/education/applications" className="btn-primary" style={{ textDecoration: "none", display: "inline-flex", gap: 8, alignItems: "center" }}>Open application review queue ↗</Link>
+      </section>
 
       <section style={{ marginTop: 28 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
