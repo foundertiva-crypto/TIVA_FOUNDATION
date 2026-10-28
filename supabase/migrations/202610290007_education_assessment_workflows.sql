@@ -245,12 +245,113 @@ CREATE TRIGGER tiva_guard_education_submission
 BEFORE INSERT ON public.education_submissions
 FOR EACH ROW EXECUTE FUNCTION public.tiva_guard_education_submission();
 
--- Reviewer identity, scope and immutable status-history behavior are enforced
--- by the existing review trigger and policies. Keep reviews append-only.
+-- Harden the pre-existing review guard: reviewer must be authorised for this
+-- cohort, cannot review their own work, and the recorded score must match the
+-- published assessment's rubric maximum. Reviews remain append-only.
+CREATE OR REPLACE FUNCTION public.tiva_guard_education_assessment_review()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, auth
+AS $function$
+DECLARE
+  submission_cohort uuid;
+  submission_learner uuid;
+  assessment_rubric jsonb;
+  rubric_item jsonb;
+  rubric_max numeric := 0;
+  trusted_role boolean;
+BEGIN
+  trusted_role :=
+    COALESCE(current_setting('request.jwt.claim.role', true), '') = 'service_role'
+    OR current_user IN ('postgres', 'supabase_admin');
+
+  SELECT s.cohort_id, s.learner_user_id
+    INTO submission_cohort, submission_learner
+  FROM public.education_submissions s
+  WHERE s.id = NEW.submission_id;
+
+  IF submission_cohort IS NULL
+     OR submission_cohort IS DISTINCT FROM NEW.cohort_id THEN
+    RAISE EXCEPTION 'Assessment review cohort must match its submission'
+      USING ERRCODE = '23514';
+  END IF;
+
+  SELECT a.rubric INTO assessment_rubric
+  FROM public.education_assessments a
+  WHERE a.id = (
+    SELECT s.assessment_id
+    FROM public.education_submissions s
+    WHERE s.id = NEW.submission_id
+  );
+
+  IF assessment_rubric IS NULL OR jsonb_typeof(assessment_rubric) <> 'array'
+     OR jsonb_array_length(assessment_rubric) < 1 THEN
+    RAISE EXCEPTION 'Assessment review requires a valid rubric'
+      USING ERRCODE = '23514';
+  END IF;
+
+  FOR rubric_item IN SELECT value FROM jsonb_array_elements(assessment_rubric)
+  LOOP
+    IF jsonb_typeof(rubric_item -> 'max_points') <> 'number' THEN
+      RAISE EXCEPTION 'Assessment rubric contains an invalid point value'
+        USING ERRCODE = '23514';
+    END IF;
+    rubric_max := rubric_max + (rubric_item ->> 'max_points')::numeric;
+  END LOOP;
+
+  IF NEW.score IS NULL OR NEW.max_score IS NULL
+     OR NEW.score < 0 OR NEW.score > rubric_max
+     OR NEW.max_score IS DISTINCT FROM rubric_max THEN
+    RAISE EXCEPTION 'Review score and maximum must match the assessment rubric'
+      USING ERRCODE = '23514';
+  END IF;
+  IF length(trim(COALESCE(NEW.feedback, ''))) < 5
+     OR length(NEW.feedback) > 5000 THEN
+    RAISE EXCEPTION 'Review feedback must contain 5–5000 characters'
+      USING ERRCODE = '23514';
+  END IF;
+  IF NEW.rubric_version IS NULL
+     OR NEW.rubric_version !~ '^[A-Za-z0-9._-]{3,80}
+NOTIFY pgrst, 'reload schema';
+COMMIT;
+ THEN
+    RAISE EXCEPTION 'Review rubric version is invalid'
+      USING ERRCODE = '23514';
+  END IF;
+
+  IF NOT trusted_role THEN
+    IF NEW.reviewer_user_id IS DISTINCT FROM auth.uid() THEN
+      RAISE EXCEPTION 'Reviewer identity must match the signed-in user'
+        USING ERRCODE = '42501';
+    END IF;
+    IF NEW.reviewer_user_id IS NOT DISTINCT FROM submission_learner THEN
+      RAISE EXCEPTION 'A learner cannot review their own submission'
+        USING ERRCODE = '42501';
+    END IF;
+    IF NOT public.education_has_cohort_role(
+      ARRAY['education_lead','coordinator','educator','mentor'],
+      NEW.cohort_id
+    ) THEN
+      RAISE EXCEPTION 'Assessment review requires an assigned educator or mentor'
+        USING ERRCODE = '42501';
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$function$;
+
+DROP TRIGGER IF EXISTS tiva_guard_education_assessment_review ON public.education_assessment_reviews;
+CREATE TRIGGER tiva_guard_education_assessment_review
+BEFORE INSERT ON public.education_assessment_reviews
+FOR EACH ROW EXECUTE FUNCTION public.tiva_guard_education_assessment_review();
+
 REVOKE UPDATE, DELETE ON public.education_assessment_reviews FROM anon, authenticated;
 REVOKE UPDATE, DELETE ON public.education_submissions FROM anon, authenticated;
 REVOKE ALL ON FUNCTION public.tiva_guard_education_assessment() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.tiva_guard_education_submission() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.tiva_guard_education_assessment_review() FROM PUBLIC;
 
 NOTIFY pgrst, 'reload schema';
 COMMIT;
