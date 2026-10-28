@@ -312,10 +312,9 @@ BEGIN
       USING ERRCODE = '23514';
   END IF;
   IF NEW.rubric_version IS NULL
-     OR NEW.rubric_version !~ '^[A-Za-z0-9._-]{3,80}
-NOTIFY pgrst, 'reload schema';
-COMMIT;
- THEN
+     OR length(NEW.rubric_version) < 3
+     OR length(NEW.rubric_version) > 80
+     OR NEW.rubric_version ~ '[^A-Za-z0-9._-]' THEN
     RAISE EXCEPTION 'Review rubric version is invalid'
       USING ERRCODE = '23514';
   END IF;
