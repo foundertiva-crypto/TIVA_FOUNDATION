@@ -123,7 +123,7 @@ $function$;
 
 DROP TRIGGER IF EXISTS tiva_guard_education_completion_evidence ON public.education_enrollments;
 CREATE TRIGGER tiva_guard_education_completion_evidence
-BEFORE INSERT OR UPDATE OF status, completion_approved_by, completion_approved_at
+BEFORE INSERT OR UPDATE
 ON public.education_enrollments
 FOR EACH ROW
 EXECUTE FUNCTION public.tiva_guard_education_completion_evidence();
