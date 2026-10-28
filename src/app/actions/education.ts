@@ -809,3 +809,271 @@ export async function enrollAcceptedEducationApplicant(formData: FormData): Prom
     revalidatePath("/education/my-applications");
     redirect("/admin/education/cohorts?enrolled=1");
 }
+
+
+function parseEducationRubric(value: unknown): { rubric: Array<{ title: string; max_points: number }>; totalPoints: number } | null {
+    if (!Array.isArray(value) || value.length < 1 || value.length > 20) return null;
+    const rubric: Array<{ title: string; max_points: number }> = [];
+    let totalPoints = 0;
+
+    for (const item of value) {
+        if (!item || typeof item !== "object") return null;
+        const row = item as Record<string, unknown>;
+        const title = typeof row.title === "string" ? row.title.trim() : "";
+        const points = Number(row.max_points);
+        if (title.length < 2 || title.length > 120 || !Number.isFinite(points)
+            || points <= 0 || points > 100) return null;
+        rubric.push({ title, max_points: points });
+        totalPoints += points;
+    }
+
+    if (totalPoints < 1 || totalPoints > 1000) return null;
+    return { rubric, totalPoints };
+}
+
+export async function createEducationAssessment(formData: FormData): Promise<never> {
+    const sessionClient = await createClient();
+    const { data: { user } } = await sessionClient.auth.getUser();
+    if (!user) redirect("/login");
+
+    const { data: profile, error: profileError } = await sessionClient
+        .from("profiles").select("role").eq("id", user.id).single();
+    if (profileError || profile?.role !== "admin") redirect("/dashboard");
+
+    const cohortId = String(formData.get("cohort_id") ?? "").trim();
+    const title = String(formData.get("title") ?? "").trim();
+    const description = String(formData.get("description") ?? "").trim();
+    const rubricText = String(formData.get("rubric_json") ?? "").trim();
+    const dueLocal = String(formData.get("due_at") ?? "").trim();
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+    if (!uuidPattern.test(cohortId)) redirect("/admin/education/assessments?error=invalid-cohort");
+    if (title.length < 3 || title.length > 180) redirect("/admin/education/assessments?error=invalid-title");
+    if (description.length > 2000) redirect("/admin/education/assessments?error=description-too-long");
+    if (rubricText.length > 8000) redirect("/admin/education/assessments?error=invalid-rubric");
+
+    let rawRubric: unknown;
+    try { rawRubric = JSON.parse(rubricText); }
+    catch { redirect("/admin/education/assessments?error=invalid-rubric"); }
+    const parsedRubric = parseEducationRubric(rawRubric);
+    if (!parsedRubric) redirect("/admin/education/assessments?error=invalid-rubric");
+
+    const localDateTimePattern = /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$/;
+    if (!localDateTimePattern.test(dueLocal)) redirect("/admin/education/assessments?error=invalid-deadline");
+    const dueAt = new Date(`${dueLocal}:00+05:30`);
+    if (!Number.isFinite(dueAt.getTime()) || dueAt.getTime() <= Date.now()) {
+        redirect("/admin/education/assessments?error=deadline-in-past");
+    }
+
+    const { data: cohort, error: cohortError } = await sessionClient
+        .from("education_cohorts").select("id,status,program_id").eq("id", cohortId).maybeSingle();
+    if (cohortError || !cohort) redirect("/admin/education/assessments?error=cohort-unavailable");
+    if (cohort.status !== "active") redirect("/admin/education/assessments?error=cohort-not-active");
+
+    const { data: program, error: programError } = await sessionClient
+        .from("education_programs").select("status").eq("id", cohort.program_id).maybeSingle();
+    if (programError || !program || program.status !== "published") {
+        redirect("/admin/education/assessments?error=program-not-published");
+    }
+
+    const { error: insertError } = await sessionClient.from("education_assessments").insert({
+        cohort_id: cohortId,
+        title,
+        description,
+        rubric: parsedRubric.rubric,
+        due_at: dueAt.toISOString(),
+        status: "draft",
+        created_by: user.id,
+    });
+    if (insertError) {
+        if (insertError.code === "42P01" || insertError.code === "PGRST205") redirect("/admin/education/assessments?error=migration-required");
+        if (insertError.code === "42501") redirect("/admin/education/assessments?error=not-authorized");
+        redirect("/admin/education/assessments?error=create-failed");
+    }
+
+    revalidatePath("/admin/education/assessments");
+    revalidatePath("/education/learning");
+    redirect("/admin/education/assessments?created=1");
+}
+
+export async function setEducationAssessmentStatus(formData: FormData): Promise<never> {
+    const sessionClient = await createClient();
+    const { data: { user } } = await sessionClient.auth.getUser();
+    if (!user) redirect("/login");
+
+    const { data: profile, error: profileError } = await sessionClient
+        .from("profiles").select("role").eq("id", user.id).single();
+    if (profileError || profile?.role !== "admin") redirect("/dashboard");
+
+    const assessmentId = String(formData.get("assessment_id") ?? "").trim();
+    const targetStatus = String(formData.get("status") ?? "");
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(assessmentId)) {
+        redirect("/admin/education/assessments?error=invalid-assessment");
+    }
+    if (!["published","closed"].includes(targetStatus)) redirect("/admin/education/assessments?error=invalid-status");
+
+    const { data: assessment, error: assessmentError } = await sessionClient
+        .from("education_assessments")
+        .select("id,cohort_id,status,due_at")
+        .eq("id", assessmentId)
+        .maybeSingle();
+    if (assessmentError || !assessment) redirect("/admin/education/assessments?error=assessment-unavailable");
+    if (targetStatus === "published" && assessment.status !== "draft") redirect("/admin/education/assessments?error=invalid-transition");
+    if (targetStatus === "closed" && assessment.status !== "published") redirect("/admin/education/assessments?error=invalid-transition");
+    if (targetStatus === "published" && assessment.due_at && Date.parse(assessment.due_at) <= Date.now()) {
+        redirect("/admin/education/assessments?error=deadline-in-past");
+    }
+
+    const { data: cohort } = await sessionClient
+        .from("education_cohorts").select("id,status,program_id").eq("id", assessment.cohort_id).maybeSingle();
+    if (!cohort || cohort.status !== "active") redirect("/admin/education/assessments?error=cohort-not-active");
+    const { data: program } = await sessionClient
+        .from("education_programs").select("status").eq("id", cohort.program_id).maybeSingle();
+    if (!program || program.status !== "published") redirect("/admin/education/assessments?error=program-not-published");
+
+    const { error: updateError } = await sessionClient
+        .from("education_assessments")
+        .update({ status: targetStatus })
+        .eq("id", assessmentId);
+    if (updateError) redirect("/admin/education/assessments?error=update-failed");
+
+    revalidatePath("/admin/education/assessments");
+    revalidatePath("/education/learning");
+    redirect("/admin/education/assessments?updated=1");
+}
+
+export async function submitEducationWork(formData: FormData): Promise<never> {
+    const sessionClient = await createClient();
+    const { data: { user } } = await sessionClient.auth.getUser();
+    if (!user) redirect("/login");
+
+    const assessmentId = String(formData.get("assessment_id") ?? "").trim();
+    const submissionText = String(formData.get("submission_text") ?? "").trim();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(assessmentId)) {
+        redirect("/education/learning?error=invalid-assessment");
+    }
+    if (submissionText.length < 20 || submissionText.length > 8000) {
+        redirect("/education/learning?error=invalid-submission");
+    }
+
+    const { data: assessment, error: assessmentError } = await sessionClient
+        .from("education_assessments")
+        .select("id,cohort_id,status,due_at")
+        .eq("id", assessmentId)
+        .maybeSingle();
+    if (assessmentError || !assessment) redirect("/education/learning?error=assessment-unavailable");
+    if (assessment.status !== "published") redirect("/education/learning?error=assessment-not-open");
+    if (assessment.due_at && Date.parse(assessment.due_at) <= Date.now()) {
+        redirect("/education/learning?error=deadline-passed");
+    }
+
+    const { data: enrollment, error: enrollmentError } = await sessionClient
+        .from("education_enrollments")
+        .select("id,cohort_id,learner_user_id,status")
+        .eq("cohort_id", assessment.cohort_id)
+        .eq("learner_user_id", user.id)
+        .in("status", ["enrolled","active"])
+        .maybeSingle();
+    if (enrollmentError || !enrollment) redirect("/education/learning?error=enrolment-required");
+
+    const { data: latest, error: latestError } = await sessionClient
+        .from("education_submissions")
+        .select("id,attempt_number")
+        .eq("assessment_id", assessmentId)
+        .eq("learner_user_id", user.id)
+        .order("attempt_number", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    if (latestError) redirect("/education/learning?error=records-unavailable");
+
+    let attemptNumber = 1;
+    if (latest) {
+        const { data: latestReview, error: reviewError } = await sessionClient
+            .from("education_assessment_reviews")
+            .select("outcome")
+            .eq("submission_id", latest.id)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+        if (reviewError) redirect("/education/learning?error=records-unavailable");
+        if (latestReview?.outcome !== "needs_revision") redirect("/education/learning?error=already-submitted");
+        attemptNumber = latest.attempt_number + 1;
+    }
+
+    const { error: insertError } = await sessionClient.from("education_submissions").insert({
+        assessment_id: assessmentId,
+        cohort_id: enrollment.cohort_id,
+        enrollment_id: enrollment.id,
+        learner_user_id: user.id,
+        attempt_number: attemptNumber,
+        submission_text: submissionText,
+        private_storage_path: null,
+        submitted_at: new Date().toISOString(),
+    });
+    if (insertError) {
+        if (insertError.code === "23505") redirect("/education/learning?error=already-submitted");
+        if (insertError.code === "23514") redirect("/education/learning?error=submission-gate");
+        if (insertError.code === "42501") redirect("/education/learning?error=not-authorized");
+        redirect("/education/learning?error=submit-failed");
+    }
+
+    revalidatePath("/education/learning");
+    revalidatePath("/admin/education/assessments");
+    redirect("/education/learning?submitted=1");
+}
+
+export async function reviewEducationSubmission(formData: FormData): Promise<never> {
+    const sessionClient = await createClient();
+    const { data: { user } } = await sessionClient.auth.getUser();
+    if (!user) redirect("/login");
+
+    const { data: profile, error: profileError } = await sessionClient
+        .from("profiles").select("role").eq("id", user.id).single();
+    if (profileError || profile?.role !== "admin") redirect("/dashboard");
+
+    const submissionId = String(formData.get("submission_id") ?? "").trim();
+    const score = Number(String(formData.get("score") ?? "").trim());
+    const outcome = String(formData.get("outcome") ?? "");
+    const feedback = String(formData.get("feedback") ?? "").trim();
+    const rubricVersion = String(formData.get("rubric_version") ?? "rubric-1").trim();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(submissionId)) {
+        redirect("/admin/education/assessments?error=invalid-submission");
+    }
+    if (!["needs_revision","accepted","not_passed"].includes(outcome)) redirect("/admin/education/assessments?error=invalid-outcome");
+    if (!Number.isFinite(score) || score < 0) redirect("/admin/education/assessments?error=invalid-score");
+    if (feedback.length < 5 || feedback.length > 5000) redirect("/admin/education/assessments?error=invalid-feedback");
+    if (!/^[A-Za-z0-9._-]{3,80}$/.test(rubricVersion)) redirect("/admin/education/assessments?error=invalid-rubric-version");
+
+    const { data: submission, error: submissionError } = await sessionClient
+        .from("education_submissions")
+        .select("id,assessment_id,cohort_id,learner_user_id")
+        .eq("id", submissionId)
+        .maybeSingle();
+    if (submissionError || !submission) redirect("/admin/education/assessments?error=submission-unavailable");
+    if (submission.learner_user_id === user.id) redirect("/admin/education/assessments?error=self-review");
+
+    const { data: assessment, error: assessmentError } = await sessionClient
+        .from("education_assessments").select("rubric").eq("id", submission.assessment_id).maybeSingle();
+    if (assessmentError || !assessment) redirect("/admin/education/assessments?error=assessment-unavailable");
+    const parsedRubric = parseEducationRubric(assessment.rubric);
+    if (!parsedRubric || score > parsedRubric.totalPoints) redirect("/admin/education/assessments?error=score-exceeds-rubric");
+
+    const { error: insertError } = await sessionClient.from("education_assessment_reviews").insert({
+        submission_id: submissionId,
+        cohort_id: submission.cohort_id,
+        reviewer_user_id: user.id,
+        score,
+        max_score: parsedRubric.totalPoints,
+        feedback,
+        outcome,
+        rubric_version: rubricVersion,
+    });
+    if (insertError) {
+        if (insertError.code === "42501") redirect("/admin/education/assessments?error=not-authorized");
+        redirect("/admin/education/assessments?error=review-failed");
+    }
+
+    revalidatePath("/admin/education/assessments");
+    revalidatePath("/education/learning");
+    redirect("/admin/education/assessments?reviewed=1");
+}
