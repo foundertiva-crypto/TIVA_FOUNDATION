@@ -1,3 +1,4 @@
+import { requireEducationAdmin } from "@/lib/education/admin-guard";
 import Link from "next/link";
 import type { CSSProperties } from "react";
 import { AlertTriangle, ArrowLeft, BookOpenCheck, ExternalLink, FileText, Star } from "lucide-react";
@@ -91,6 +92,7 @@ function Pill({ status }: { status: string }) {
 }
 
 export default async function EducationAssessmentsAdminPage({ searchParams }: Props) {
+  await requireEducationAdmin();
   const query = await searchParams;
   let ready = false;
   let cohorts: Cohort[] = [];
