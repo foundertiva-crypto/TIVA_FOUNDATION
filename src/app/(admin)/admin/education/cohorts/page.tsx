@@ -9,6 +9,7 @@ import {
   createEducationSession,
   setEducationCohortStatus,
   setEducationSessionPublished,
+  enrollAcceptedEducationApplicant,
 } from "@/app/actions/education";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -43,7 +44,7 @@ type Session = {
   published: boolean;
 };
 type Props = {
-  searchParams: Promise<{ error?: string; created?: string; ["session-created"]?: string; ["cohort-updated"]?: string; ["session-updated"]?: string }>;
+  searchParams: Promise<{ error?: string; created?: string; enrolled?: string; ["session-created"]?: string; ["cohort-updated"]?: string; ["session-updated"]?: string }>;
 };
 
 const errorMessages: Record<string,string> = {
@@ -60,6 +61,15 @@ const errorMessages: Record<string,string> = {
   "migration-required": "Education migration is missing or the database API cache needs a reload.",
   "create-failed": "Cohort could not be created. No new cohort is confirmed.",
   "invalid-cohort": "The cohort reference is invalid.",
+  "invalid-enrolment-reference": "Choose a valid application and cohort.",
+  "application-unavailable": "The accepted application could not be loaded.",
+  "application-not-accepted": "Only an accepted application can be enrolled.",
+  "programme-cohort-mismatch": "The application and cohort belong to different programmes.",
+  "cohort-not-active": "Activate the cohort before enrolling learners.",
+  "already-enrolled": "This application already has an enrolment.",
+  "enrolment-check-failed": "Existing enrolment could not be verified.",
+  "capacity-or-integrity": "Enrolment was blocked by cohort/programme capacity or an integrity check.",
+  "enrolment-failed": "Enrolment could not be saved.",
   "session-title": "Session title must be 3–180 characters.",
   "session-details": "Session description or location is too long.",
   "session-dates": "Enter valid session date and time values.",
@@ -113,23 +123,28 @@ export default async function EducationCohortsPage({ searchParams }: Props) {
   let programs: Program[] = [];
   let cohorts: Cohort[] = [];
   let sessions: Session[] = [];
+  let acceptedApplications: AcceptedApplication[] = [];
+  let enrollments: Enrollment[] = [];
   const enrollmentCounts = new Map<string,number>();
 
   try {
     const admin = createAdminClient();
-    const [programResult, cohortResult, sessionResult, enrollmentResult] = await Promise.all([
+    const [programResult, cohortResult, sessionResult, enrollmentResult, acceptedApplicationResult] = await Promise.all([
       admin.from("education_programs").select("id,title,slug,status,capacity").order("created_at", { ascending: false }).limit(200),
       admin.from("education_cohorts").select("id,program_id,slug,title,start_date,end_date,timezone,delivery_mode,capacity,status").order("created_at", { ascending: false }).limit(300),
       admin.from("education_sessions").select("id,cohort_id,title,description,starts_at,ends_at,delivery_mode,location_label,published").order("starts_at", { ascending: true }).limit(1000),
-      admin.from("education_enrollments").select("cohort_id,status").limit(5000),
+      admin.from("education_enrollments").select("id,cohort_id,learner_user_id,application_id,status").limit(5000),
+      admin.from("education_applications").select("id,program_id,reference_code,applicant_full_name,status").eq("status", "accepted").order("submitted_at", { ascending: true }).limit(1000),
     ]);
 
-    if (!programResult.error && !cohortResult.error && !sessionResult.error && !enrollmentResult.error) {
+    if (!programResult.error && !cohortResult.error && !sessionResult.error && !enrollmentResult.error && !acceptedApplicationResult.error) {
       ready = true;
       programs = (programResult.data ?? []) as Program[];
       cohorts = (cohortResult.data ?? []) as Cohort[];
       sessions = (sessionResult.data ?? []) as Session[];
-      for (const row of enrollmentResult.data ?? []) {
+      enrollments = (enrollmentResult.data ?? []) as Enrollment[];
+      acceptedApplications = (acceptedApplicationResult.data ?? []) as AcceptedApplication[];
+      for (const row of enrollments) {
         if (["invited","enrolled","active","completed","incomplete"].includes(row.status)) {
           enrollmentCounts.set(row.cohort_id, (enrollmentCounts.get(row.cohort_id) ?? 0) + 1);
         }
@@ -164,6 +179,7 @@ export default async function EducationCohortsPage({ searchParams }: Props) {
 
       {query.created && <div role="status" style={{ marginTop: 18, border: "1px solid rgba(0,201,135,.35)", background: "rgba(0,201,135,.07)", borderRadius: 10, padding: 13, fontSize: 13 }}>Cohort created as a draft. Add the session schedule before activating it.</div>}
       {query["session-created"] && <div role="status" style={{ marginTop: 18, border: "1px solid rgba(0,201,135,.35)", background: "rgba(0,201,135,.07)", borderRadius: 10, padding: 13, fontSize: 13 }}>Session saved as a draft; it is not yet visible to learners.</div>}
+      {query.enrolled && <div role="status" style={{ marginTop: 18, border: "1px solid rgba(0,201,135,.35)", background: "rgba(0,201,135,.07)", borderRadius: 10, padding: 13, fontSize: 13 }}>Accepted applicant enrolled. They can now see their cohort and published sessions in My Applications.</div>}
       {query["cohort-updated"] && <div role="status" style={{ marginTop: 18, border: "1px solid rgba(0,201,135,.35)", background: "rgba(0,201,135,.07)", borderRadius: 10, padding: 13, fontSize: 13 }}>Cohort status updated.</div>}
       {query["session-updated"] && <div role="status" style={{ marginTop: 18, border: "1px solid rgba(0,201,135,.35)", background: "rgba(0,201,135,.07)", borderRadius: 10, padding: 13, fontSize: 13 }}>Session publication updated.</div>}
       {errorText && <div role="alert" style={{ marginTop: 18, border: "1px solid rgba(255,107,107,.35)", background: "rgba(255,107,107,.07)", borderRadius: 10, padding: 13, fontSize: 13 }}>{errorText}</div>}
@@ -249,6 +265,28 @@ export default async function EducationCohortsPage({ searchParams }: Props) {
                         <form action={setEducationCohortStatus}><input type="hidden" name="cohort_id" value={cohort.id}/><input type="hidden" name="status" value="completed"/><button type="submit" style={{ border: "1px solid var(--border-subtle)", borderRadius: 8, padding: "8px 10px", fontSize: 12, background: "transparent", color: "var(--text-secondary)", cursor: "pointer" }}>Mark completed</button></form>
                         <form action={setEducationCohortStatus}><input type="hidden" name="cohort_id" value={cohort.id}/><input type="hidden" name="status" value="cancelled"/><button type="submit" style={{ border: "1px solid rgba(255,107,107,.4)", borderRadius: 8, padding: "8px 10px", fontSize: 12, background: "transparent", color: "#F97373", cursor: "pointer" }}>Cancel cohort</button></form>
                       </div>
+                    )}
+
+                    {cohort.status === "active" && (
+                      <details style={{ borderTop: "1px solid var(--border-subtle)", marginTop: 15, paddingTop: 12 }}>
+                        <summary style={{ cursor: "pointer", fontSize: 13, fontWeight: 800 }}>Enroll an accepted applicant</summary>
+                        {(() => {
+                          const alreadyEnrolled = new Set(enrollments.filter((entry) => entry.application_id).map((entry) => entry.application_id as string));
+                          const eligibleApplications = acceptedApplications.filter((application) => application.program_id === cohort.program_id && !alreadyEnrolled.has(application.id));
+                          return eligibleApplications.length === 0
+                            ? <p style={{ color: "var(--text-muted)", fontSize: 12, marginTop: 10 }}>No accepted, unenrolled applications are available for this programme.</p>
+                            : <form action={enrollAcceptedEducationApplicant} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: 10, marginTop: 12, alignItems: "end" }}>
+                              <input type="hidden" name="cohort_id" value={cohort.id}/>
+                              <label style={{ display: "grid", gap: 5, color: "var(--text-secondary)", fontSize: 12 }}>Accepted applicant
+                                <select name="application_id" required defaultValue="" style={inputStyle}>
+                                  <option value="" disabled>Select applicant</option>
+                                  {eligibleApplications.map((application) => <option key={application.id} value={application.id}>{application.reference_code} · {application.applicant_full_name}</option>)}
+                                </select>
+                              </label>
+                              <button type="submit" className="btn-primary" style={{ border: 0, borderRadius: 9, padding: "11px 13px", fontWeight: 800, cursor: "pointer" }}>Create enrolment</button>
+                            </form>;
+                        })()}
+                      </details>
                     )}
 
                     {cohort.status !== "completed" && cohort.status !== "cancelled" && (
