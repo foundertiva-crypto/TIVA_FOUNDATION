@@ -297,8 +297,10 @@ export default async function EducationAdminPage({
         </section>
       </div>
 
-      <section style={{ marginTop: 8, marginBottom: 10 }}>
-        <Link href="/admin/education/applications" className="btn-primary" style={{ textDecoration: "none", display: "inline-flex", gap: 8, alignItems: "center" }}>Open application review queue ↗</Link>
+      <section style={{ marginTop: 8, marginBottom: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <Link href="/admin/education/applications" className="btn-primary" style={{ textDecoration: "none", display: "inline-flex", gap: 8, alignItems: "center" }}>Application review ↗</Link>
+        <Link href="/admin/education/cohorts" className="btn-primary" style={{ textDecoration: "none", display: "inline-flex", gap: 8, alignItems: "center" }}>Cohorts & sessions ↗</Link>
+        <Link href="/admin/education/attendance" className="btn-primary" style={{ textDecoration: "none", display: "inline-flex", gap: 8, alignItems: "center" }}>Attendance register ↗</Link>
       </section>
 
       <section style={{ marginTop: 28 }}>
