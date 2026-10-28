@@ -15,6 +15,7 @@ import {
     Menu,
     X,
     LayoutGrid,
+    GraduationCap,
 } from "lucide-react";
 import { signOut } from "@/app/actions/auth";
 
@@ -26,6 +27,7 @@ const navItems = [
     { href: "/admin/rewards", label: "Rewards", icon: Gift },
     { href: "/admin/challenges", label: "Challenges", icon: Trophy },
     { href: "/admin/services/cow-donation", label: "Services", icon: LayoutGrid },
+    { href: "/admin/education", label: "Education", icon: GraduationCap },
 ];
 
 
