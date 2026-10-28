@@ -741,3 +741,72 @@ export async function recordEducationAttendance(formData: FormData): Promise<nev
     revalidatePath("/education/my-applications");
     redirect("/admin/education/attendance?saved=1");
 }
+
+
+export async function enrollAcceptedEducationApplicant(formData: FormData): Promise<never> {
+    const sessionClient = await createClient();
+    const { data: { user } } = await sessionClient.auth.getUser();
+    if (!user) redirect("/login");
+
+    const { data: profile, error: profileError } = await sessionClient
+        .from("profiles").select("role").eq("id", user.id).single();
+    if (profileError || profile?.role !== "admin") redirect("/dashboard");
+
+    const applicationId = String(formData.get("application_id") ?? "").trim();
+    const cohortId = String(formData.get("cohort_id") ?? "").trim();
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidPattern.test(applicationId) || !uuidPattern.test(cohortId)) {
+        redirect("/admin/education/cohorts?error=invalid-enrolment-reference");
+    }
+
+    const [{ data: application, error: applicationError }, { data: cohort, error: cohortError }] = await Promise.all([
+        sessionClient.from("education_applications")
+            .select("id,program_id,applicant_user_id,status,reference_code")
+            .eq("id", applicationId)
+            .maybeSingle(),
+        sessionClient.from("education_cohorts")
+            .select("id,program_id,status")
+            .eq("id", cohortId)
+            .maybeSingle(),
+    ]);
+
+    if (applicationError || !application) redirect("/admin/education/cohorts?error=application-unavailable");
+    if (cohortError || !cohort) redirect("/admin/education/cohorts?error=cohort-unavailable");
+    if (application.status !== "accepted") redirect("/admin/education/cohorts?error=application-not-accepted");
+    if (application.program_id !== cohort.program_id) redirect("/admin/education/cohorts?error=programme-cohort-mismatch");
+    if (cohort.status !== "active") redirect("/admin/education/cohorts?error=cohort-not-active");
+
+    const { data: program, error: programError } = await sessionClient
+        .from("education_programs").select("status").eq("id", cohort.program_id).maybeSingle();
+    if (programError || !program || program.status !== "published") {
+        redirect("/admin/education/cohorts?error=program-not-published");
+    }
+
+    const { data: existing, error: existingError } = await sessionClient
+        .from("education_enrollments")
+        .select("id")
+        .eq("application_id", applicationId)
+        .maybeSingle();
+    if (existingError) redirect("/admin/education/cohorts?error=enrolment-check-failed");
+    if (existing) redirect("/admin/education/cohorts?error=already-enrolled");
+
+    const { error: insertError } = await sessionClient.from("education_enrollments").insert({
+        cohort_id: cohortId,
+        learner_user_id: application.applicant_user_id,
+        application_id: applicationId,
+        status: "enrolled",
+        created_by: user.id,
+    });
+
+    if (insertError) {
+        if (insertError.code === "23505") redirect("/admin/education/cohorts?error=already-enrolled");
+        if (insertError.code === "23514") redirect("/admin/education/cohorts?error=capacity-or-integrity");
+        if (insertError.code === "42501") redirect("/admin/education/cohorts?error=not-authorized");
+        redirect("/admin/education/cohorts?error=enrolment-failed");
+    }
+
+    revalidatePath("/admin/education/cohorts");
+    revalidatePath("/admin/education/attendance");
+    revalidatePath("/education/my-applications");
+    redirect("/admin/education/cohorts?enrolled=1");
+}
