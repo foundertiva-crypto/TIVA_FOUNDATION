@@ -41,7 +41,7 @@ export default function LoginPage() {
         } else {
             sessionStorage.setItem("otp_phone", formatted);
             const requestedNext = new URLSearchParams(window.location.search).get("next") ?? "";
-            if (/^\/education\/(?:my-applications|apply\/[a-z0-9]+(?:-[a-z0-9]+)*)$/.test(requestedNext)) {
+            if (/^\/education\/(?:my-applications|learning|apply\/[a-z0-9]+(?:-[a-z0-9]+)*)$/.test(requestedNext)) {
                 sessionStorage.setItem("otp_next", requestedNext);
             } else {
                 sessionStorage.removeItem("otp_next");
