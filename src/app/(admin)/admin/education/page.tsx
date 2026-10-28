@@ -1,3 +1,4 @@
+import { requireEducationAdmin } from "@/lib/education/admin-guard";
 import type { CSSProperties } from "react";
 import Link from "next/link";
 import {
@@ -123,6 +124,7 @@ export default async function EducationAdminPage({
 }: {
   searchParams: Promise<{ created?: string; error?: string; readiness?: string; published?: string; paused?: string }>;
 }) {
+  await requireEducationAdmin();
   const [{ created, error, readiness, published, paused }, snapshot] = await Promise.all([searchParams, getEducationSnapshot()]);
   const metrics = [
     { label: "Programmes", value: snapshot.ready ? snapshot.counts.programs : "—", sub: "Database records", icon: ClipboardList },
