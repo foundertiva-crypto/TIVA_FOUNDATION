@@ -72,7 +72,7 @@ INSERT INTO public.education_sessions
 VALUES
   ('60000000-0000-4000-8000-000000000001',
    '30000000-0000-4000-8000-000000000001', 'Test Session',
-   now() + interval '1 day', now() + interval '1 day 1 hour', true,
+   now() - interval '1 day', now() - interval '23 hours', true,
    '10000000-0000-4000-8000-000000000003')
 ON CONFLICT (id) DO NOTHING;
 
@@ -232,6 +232,61 @@ BEGIN
      AND reviewer_user_id = '10000000-0000-4000-8000-000000000003';
   IF review_count <> 2 THEN
     RAISE EXCEPTION 'Functional regression: application status history is incomplete';
+  END IF;
+END
+$test$;
+
+-- Attendance is tied to the correct published session and enrolment.
+INSERT INTO public.education_attendance
+  (session_id, cohort_id, enrollment_id, learner_user_id, attendance_status, recorded_by, recorded_at)
+VALUES
+  ('60000000-0000-4000-8000-000000000001',
+   '30000000-0000-4000-8000-000000000001',
+   '50000000-0000-4000-8000-000000000001',
+   '10000000-0000-4000-8000-000000000001',
+   'present', '10000000-0000-4000-8000-000000000003', now());
+
+-- A correction without a reason must be rejected.
+DO $test$
+DECLARE blocked boolean := false;
+BEGIN
+  BEGIN
+    UPDATE public.education_attendance
+       SET attendance_status = 'absent',
+           correction_reason = NULL,
+           last_corrected_by = '10000000-0000-4000-8000-000000000003',
+           last_corrected_at = now()
+     WHERE session_id = '60000000-0000-4000-8000-000000000001'
+       AND enrollment_id = '50000000-0000-4000-8000-000000000001';
+  EXCEPTION WHEN check_violation THEN blocked := true;
+  END;
+  IF NOT blocked THEN
+    RAISE EXCEPTION 'SECURITY FAILURE: attendance status changed without correction reason';
+  END IF;
+END
+$test$;
+
+UPDATE public.education_attendance
+   SET attendance_status = 'late',
+       correction_reason = 'Corrected after mentor review',
+       last_corrected_by = '10000000-0000-4000-8000-000000000003',
+       last_corrected_at = now()
+ WHERE session_id = '60000000-0000-4000-8000-000000000001'
+   AND enrollment_id = '50000000-0000-4000-8000-000000000001';
+
+DO $test$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM public.education_attendance
+     WHERE session_id = '60000000-0000-4000-8000-000000000001'
+       AND enrollment_id = '50000000-0000-4000-8000-000000000001'
+       AND attendance_status = 'late'
+       AND recorded_by = '10000000-0000-4000-8000-000000000003'
+       AND last_corrected_by = '10000000-0000-4000-8000-000000000003'
+       AND last_corrected_at IS NOT NULL
+       AND correction_reason = 'Corrected after mentor review'
+  ) THEN
+    RAISE EXCEPTION 'Functional regression: attendance correction audit fields were not saved';
   END IF;
 END
 $test$;
