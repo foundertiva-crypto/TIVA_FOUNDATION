@@ -1,3 +1,4 @@
+import { requireEducationAdmin } from "@/lib/education/admin-guard";
 import Link from "next/link";
 import type { CSSProperties } from "react";
 import { AlertTriangle, ArrowLeft, Award, ExternalLink, ShieldCheck } from "lucide-react";
@@ -53,6 +54,7 @@ function formatDate(value: string) {
 function humanize(value: string) { return value.replaceAll("_", " "); }
 
 export default async function EducationCertificatesAdminPage({ searchParams }: Props) {
+  await requireEducationAdmin();
   const query = await searchParams;
   let ready = false;
   let enrollments: Enrollment[] = [];
