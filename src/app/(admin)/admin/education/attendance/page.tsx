@@ -1,3 +1,4 @@
+import { requireEducationAdmin } from "@/lib/education/admin-guard";
 import Link from "next/link";
 import type { CSSProperties } from "react";
 import { AlertTriangle, ArrowLeft, Clock3, ShieldCheck } from "lucide-react";
@@ -67,6 +68,7 @@ const inputStyle: CSSProperties = {
 };
 
 export default async function EducationAttendanceAdminPage({ searchParams }: Props) {
+  await requireEducationAdmin();
   const query = await searchParams;
   let ready = false;
   let sessions: Session[] = [];
