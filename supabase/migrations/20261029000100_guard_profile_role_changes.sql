@@ -1,3 +1,19 @@
+-- Harden the existing policy helper: SECURITY DEFINER functions must pin search_path.
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $function$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.profiles AS p
+    WHERE p.id = auth.uid()
+      AND p.role = 'admin'
+  );
+$function$;
+
 -- TIVA Foundation security guard.
 -- Protect both admin privileges and moderation/referral integrity fields.
 -- Apply to staging first; do not run against production without a verified backup and release window.
