@@ -53,7 +53,7 @@ DECLARE
 BEGIN
   trusted_role :=
     COALESCE(current_setting('request.jwt.claim.role', true), '') = 'service_role'
-    OR session_user IN ('postgres', 'supabase_admin');
+    OR current_user IN ('postgres', 'supabase_admin');
 
   SELECT s.cohort_id INTO session_cohort
     FROM public.education_sessions s
