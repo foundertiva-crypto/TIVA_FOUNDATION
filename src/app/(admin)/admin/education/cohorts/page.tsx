@@ -43,6 +43,9 @@ type Session = {
   location_label: string | null;
   published: boolean;
 };
+type Enrollment = { id: string; cohort_id: string; learner_user_id: string; application_id: string | null; status: string };
+type AcceptedApplication = { id: string; program_id: string; reference_code: string; applicant_full_name: string; status: string };
+
 type Props = {
   searchParams: Promise<{ error?: string; created?: string; enrolled?: string; ["session-created"]?: string; ["cohort-updated"]?: string; ["session-updated"]?: string }>;
 };
