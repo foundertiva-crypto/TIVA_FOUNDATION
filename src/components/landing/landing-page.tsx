@@ -206,9 +206,14 @@ export default function LandingPage() {
                             TIVA
                         </span>
                     </div>
-                    <Link href="/login" className="btn-primary" style={{ padding: "10px 24px", fontSize: "14px" }}>
-                        Get Started
-                    </Link>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <Link href="/education" style={{ color: "var(--text-secondary)", textDecoration: "none", fontSize: 13, fontWeight: 700 }}>
+                            Education
+                        </Link>
+                        <Link href="/login" className="btn-primary" style={{ padding: "10px 24px", fontSize: "14px" }}>
+                            Get Started
+                        </Link>
+                    </div>
                 </div>
             </nav>
 
