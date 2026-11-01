@@ -144,6 +144,7 @@ DECLARE
   v_learner_id uuid;
   v_status text;
   v_award_title text;
+  v_existing_award_title text;
   v_certificate_id uuid;
   v_verification_code uuid;
   v_issued_at timestamptz;
@@ -185,7 +186,7 @@ BEGIN
   -- Make the action safely retryable if the client lost the response after a
   -- transaction had already succeeded.
   SELECT cert.id, cert.verification_code, cert.award_title, cert.issued_at
-    INTO v_certificate_id, v_verification_code, v_award_title, v_issued_at
+    INTO v_certificate_id, v_verification_code, v_existing_award_title, v_issued_at
   FROM public.education_certificates cert
   WHERE cert.enrollment_id = p_enrollment_id;
 
@@ -194,7 +195,7 @@ BEGIN
       'created', false,
       'certificate_id', v_certificate_id,
       'verification_code', v_verification_code,
-      'award_title', v_award_title,
+      'award_title', v_existing_award_title,
       'issued_at', v_issued_at,
       'certificate_status', 'already_exists'
     );
